@@ -1,0 +1,150 @@
+name: Build & Deploy Android App
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      build_type:
+        description: 'Build artifact type'
+        required: true
+        default: 'both'
+        type: choice
+        options:
+          - 'both'
+          - 'apk'
+          - 'bundle'
+      deploy_to_play_store:
+        description: 'Publish to Google Play Store'
+        required: false
+        type: boolean
+        default: false
+      track:
+        description: 'Google Play track'
+        required: false
+        default: 'internal'
+        type: choice
+        options:
+          - 'internal'
+          - 'alpha'
+          - 'beta'
+          - 'production'
+
+jobs:
+  build-android:
+    name: Build Signed Android Release
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci || npm install
+
+      - name: Setup Java JDK 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: 21
+          cache: 'gradle'
+
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Build Web Application
+        run: npm run build
+
+      - name: Sync Capacitor Android
+        run: npx cap sync android
+
+      - name: Prepare Signing Keystore
+        id: keystore
+        env:
+          KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          mkdir -p android/app
+          if [ -n "$KEYSTORE_BASE64" ]; then
+            echo "Decoding release keystore from secrets..."
+            echo "$KEYSTORE_BASE64" | base64 --decode > android/app/winrah-release.keystore
+            echo "has_keystore=true" >> $GITHUB_OUTPUT
+          else
+            echo "No secret keystore provided. Generating a CI self-signed release key..."
+            keytool -genkeypair -v \
+              -keystore android/app/winrah-release.keystore \
+              -alias "${KEY_ALIAS:-winrah}" \
+              -keyalg RSA -keysize 2048 -validity 10000 \
+              -storepass "${KEYSTORE_PASSWORD:-winrah1234}" \
+              -keypass "${KEY_PASSWORD:-winrah1234}" \
+              -dname "CN=WINRAH CI, OU=Mobile, O=Winrah, L=Casablanca, C=MA"
+            echo "has_keystore=generated" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Build Signed APK
+        if: ${{ github.event.inputs.build_type == 'apk' || github.event.inputs.build_type == 'both' || github.event_name == 'push' }}
+        env:
+          KEYSTORE_FILE: winrah-release.keystore
+          KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD || 'winrah1234' }}
+          KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS || 'winrah' }}
+          KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD || 'winrah1234' }}
+        run: |
+          cd android
+          ./gradlew assembleRelease --no-daemon --stacktrace
+
+      - name: Build Signed Android App Bundle (AAB)
+        if: ${{ github.event.inputs.build_type == 'bundle' || github.event.inputs.build_type == 'both' || github.event_name == 'push' }}
+        env:
+          KEYSTORE_FILE: winrah-release.keystore
+          KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD || 'winrah1234' }}
+          KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS || 'winrah' }}
+          KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD || 'winrah1234' }}
+        run: |
+          cd android
+          ./gradlew bundleRelease --no-daemon --stacktrace
+
+      - name: Upload Signed APK Artifact
+        if: ${{ github.event.inputs.build_type == 'apk' || github.event.inputs.build_type == 'both' || github.event_name == 'push' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: winrah-android-release-apk
+          path: android/app/build/outputs/apk/release/*.apk
+          retention-days: 30
+
+      - name: Upload Signed AAB Artifact
+        if: ${{ github.event.inputs.build_type == 'bundle' || github.event.inputs.build_type == 'both' || github.event_name == 'push' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: winrah-android-release-aab
+          path: android/app/build/outputs/bundle/release/*.aab
+          retention-days: 30
+
+      - name: Publish to Google Play Store
+        if: ${{ github.event.inputs.deploy_to_play_store == 'true' && secrets.PLAY_STORE_JSON_KEY != '' }}
+        uses: r0adkll/upload-google-play@v1
+        with:
+          serviceAccountJsonPlainText: ${{ secrets.PLAY_STORE_JSON_KEY }}
+          packageName: com.winrah.warehouse
+          releaseFiles: android/app/build/outputs/bundle/release/*.aab
+          track: ${{ github.event.inputs.track || 'internal' }}
+          status: completed
+
+      - name: Create GitHub Release & Attach Artifacts
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            android/app/build/outputs/apk/release/*.apk
+            android/app/build/outputs/bundle/release/*.aab
+          generate_release_notes: true

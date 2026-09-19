@@ -22,3 +22,11 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# Keystores & sensitive credentials
+*.keystore
+*.jks
+*.p12
+*.mobileprovision
+android/local.properties
+

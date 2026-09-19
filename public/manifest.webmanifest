@@ -1,0 +1,19 @@
+{
+  "name": "WINRAH - Gestion Entrepôt Chaussures",
+  "short_name": "WINRAH",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#f8fafc",
+  "theme_color": "#0d9488",
+  "description": "Application mobile de localisation, transfert et gestion de stocks de chaussures en entrepôt, 100% opérationnelle hors-ligne.",
+  "orientation": "portrait",
+  "icons": [
+    {
+      "src": "/favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    }
+  ]
+}
