@@ -496,7 +496,7 @@ export const SearchTab: React.FC<SearchTabProps> = ({
 
                     {item.model.price && (
                       <span className="badge badge-emerald">
-                        {item.model.price.toFixed(2)} DH
+                        {item.model.price.toFixed(2)} DA
                       </span>
                     )}
                   </div>

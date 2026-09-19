@@ -46,8 +46,9 @@ export const ModelDetailModal: React.FC<ModelDetailModalProps> = ({
       style={{
         position: 'fixed',
         inset: 0,
-        background: 'rgba(0, 0, 0, 0.8)',
-        backdropFilter: 'blur(8px)',
+        background: 'rgba(15, 23, 42, 0.45)',
+        backdropFilter: 'blur(4px)',
+        WebkitBackdropFilter: 'blur(4px)',
         zIndex: 280,
         display: 'flex',
         alignItems: 'center',
@@ -56,13 +57,17 @@ export const ModelDetailModal: React.FC<ModelDetailModalProps> = ({
       }}
     >
       <div
-        className="glass-panel fade-in"
+        className="card fade-in"
         style={{
           width: '100%',
           maxWidth: '520px',
           maxHeight: '90vh',
           overflowY: 'auto',
-          background: 'var(--bg-surface)',
+          background: '#FFFFFF',
+          color: 'var(--text-primary)',
+          borderRadius: 'var(--radius-lg)',
+          boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.05)',
+          border: '1px solid var(--border-default)',
           padding: '1.5rem',
           position: 'relative',
         }}
@@ -129,7 +134,7 @@ export const ModelDetailModal: React.FC<ModelDetailModalProps> = ({
                 <span className="badge badge-neutral">Tailles: {item.model.size_range}</span>
               )}
               {item.model.price && (
-                <span className="badge badge-emerald">{item.model.price.toFixed(2)} DH</span>
+                <span className="badge badge-emerald">{item.model.price.toFixed(2)} DA</span>
               )}
             </div>
           </div>

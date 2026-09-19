@@ -24,6 +24,7 @@ import {
   TransferLog,
 } from '../types';
 import { db } from '../db/indexedDb';
+import { SectionSearchSelect } from './SectionSearchSelect';
 
 interface TransfersTabProps {
   models: ShoeModel[];
@@ -267,27 +268,18 @@ export const TransfersTab: React.FC<TransfersTabProps> = ({
           </div>
         </div>
 
-        {/* Step 1: Destination Section Selector */}
+        {/* Step 1: Destination Section Selector with Search */}
         <div style={{ marginBottom: '1rem' }}>
           <label style={{ display: 'block', fontSize: '0.8125rem', fontWeight: 500, marginBottom: '0.35rem', color: 'var(--text-secondary)' }}>
             Rayon de destination
           </label>
-          <select
-            value={targetSectionId}
-            onChange={(e) => setTargetSectionId(e.target.value)}
-            className="input-control"
-            style={{ cursor: 'pointer' }}
-          >
-            <option value="">-- Choisir un rayon --</option>
-            {availableSections.map((s) => {
-              const area = areaMap.get(s.area_id);
-              return (
-                <option key={s.id} value={s.id}>
-                  {s.name} ({area?.name || 'Zone'}) {s.capacity ? `[${s.capacity}]` : ''}
-                </option>
-              );
-            })}
-          </select>
+          <SectionSearchSelect
+            sections={availableSections}
+            areas={areas}
+            selectedSectionId={targetSectionId}
+            onSelectSection={setTargetSectionId}
+            placeholder="Rechercher un rayon (ex: B1, D27, Zone A)..."
+          />
         </div>
 
         {/* Step 2: Operator Name Attribution */}

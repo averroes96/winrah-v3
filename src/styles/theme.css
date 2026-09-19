@@ -13,12 +13,18 @@
   /* Backgrounds */
   --bg-page: #F8F9FB;
   --bg-card: #FFFFFF;
+  --bg-surface: #FFFFFF;
   --bg-input: #F1F5F9;
   --bg-hover: #F1F5F9;
 
   /* Borders */
   --border-default: #E2E8F0;
+  --border-subtle: #E2E8F0;
   --border-focus: #F59E0B;
+
+  /* Compatibility aliases */
+  --primary: #F59E0B;
+  --primary-text: #FFFFFF;
 
   /* Text */
   --text-primary: #1E293B;

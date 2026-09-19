@@ -4,7 +4,7 @@
 // CSV bulk import with error validation, and CSV export.
 // ============================================================================
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useRef } from 'react';
 import {
   FolderTree,
   Plus,
@@ -17,6 +17,15 @@ import {
   CheckCircle,
   AlertCircle,
   X,
+  Database,
+  Sparkles,
+  Search,
+  Check,
+  Loader2,
+  FileText,
+  ChevronDown,
+  ChevronRight,
+  AlertTriangle,
 } from 'lucide-react';
 import {
   Warehouse,
@@ -32,7 +41,13 @@ import {
   getCsvTemplate,
   downloadBlob,
   CsvImportRow,
+  detectCsvFormat,
+  parseV2DatabaseCsv,
+  importV2DatabaseToDb,
+  importStandardCsvToDb,
+  V2ParsedDatabase,
 } from '../lib/csvHelper';
+import { SectionSearchSelect } from './SectionSearchSelect';
 
 
 interface CatalogTabProps {
@@ -43,6 +58,8 @@ interface CatalogTabProps {
   modelSections: ModelSection[];
   activeWarehouse: Warehouse | null;
   onRefreshData: () => void;
+  onOpenQuickAdd?: () => void;
+  onNavigateToSearch?: (query?: string) => void;
 }
 
 export const CatalogTab: React.FC<CatalogTabProps> = ({
@@ -53,8 +70,28 @@ export const CatalogTab: React.FC<CatalogTabProps> = ({
   modelSections,
   activeWarehouse,
   onRefreshData,
+  onOpenQuickAdd,
+  onNavigateToSearch,
 }) => {
   const [activeSubTab, setActiveSubTab] = useState<'structure' | 'models' | 'import'>('structure');
+
+  // Structure view state (FR-2, FR-3, Uncluttered Accordion & Cascade Deletions)
+  const [expandedAreaIds, setExpandedAreaIds] = useState<Set<string>>(new Set());
+  const [structureSearch, setStructureSearch] = useState('');
+  const [sectionToDelete, setSectionToDelete] = useState<{
+    id: string;
+    name: string;
+    areaName: string;
+    modelsCount: number;
+  } | null>(null);
+  const [areaToDelete, setAreaToDelete] = useState<{
+    id: string;
+    name: string;
+    sectionsCount: number;
+    modelsCount: number;
+  } | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [deleteToast, setDeleteToast] = useState<string | null>(null);
 
   // Modal states
   const [isAddAreaOpen, setIsAddAreaOpen] = useState(false);
@@ -76,15 +113,115 @@ export const CatalogTab: React.FC<CatalogTabProps> = ({
 
   // CSV Import State
   const [csvContent, setCsvContent] = useState('');
+  const [detectedFormat, setDetectedFormat] = useState<'v2' | 'v3' | 'unknown'>('unknown');
+  const [parsedV2Data, setParsedV2Data] = useState<V2ParsedDatabase | null>(null);
   const [csvValidationErrors, setCsvValidationErrors] = useState<Array<{ line: number; message: string }>>([]);
   const [parsedRows, setParsedRows] = useState<CsvImportRow[]>([]);
   const [importSuccessMessage, setImportSuccessMessage] = useState<string | null>(null);
+  const [targetWarehouseIdForImport, setTargetWarehouseIdForImport] = useState<string>('');
+  const [isImporting, setIsImporting] = useState(false);
+  const [isLoadingOriginalV2, setIsLoadingOriginalV2] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Filtered areas for active warehouse
   const activeAreas = useMemo(() => {
     if (!activeWarehouse) return areas;
     return areas.filter((a) => a.warehouse_id === activeWarehouse.id && a.status === 'active');
   }, [areas, activeWarehouse]);
+
+  // Model count per section lookup
+  const sectionModelCountMap = useMemo(() => {
+    const map = new Map<string, number>();
+    for (const ms of modelSections) {
+      map.set(ms.section_id, (map.get(ms.section_id) || 0) + 1);
+    }
+    return map;
+  }, [modelSections]);
+
+  // Expand all areas initially when active areas load
+  React.useEffect(() => {
+    if (activeAreas.length > 0) {
+      setExpandedAreaIds(new Set(activeAreas.map((a) => a.id)));
+    }
+  }, [activeAreas.map((a) => a.id).join(',')]);
+
+  // Auto-expand all matching areas when searching
+  React.useEffect(() => {
+    if (structureSearch.trim()) {
+      setExpandedAreaIds(new Set(activeAreas.map((a) => a.id)));
+    }
+  }, [structureSearch, activeAreas]);
+
+  const toggleAreaExpand = (areaId: string) => {
+    setExpandedAreaIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(areaId)) {
+        next.delete(areaId);
+      } else {
+        next.add(areaId);
+      }
+      return next;
+    });
+  };
+
+  const handleToggleAllAreas = () => {
+    if (expandedAreaIds.size === activeAreas.length) {
+      setExpandedAreaIds(new Set());
+    } else {
+      setExpandedAreaIds(new Set(activeAreas.map((a) => a.id)));
+    }
+  };
+
+  const totalActiveSections = useMemo(() => {
+    const activeAreaIdSet = new Set(activeAreas.map((a) => a.id));
+    return sections.filter((s) => activeAreaIdSet.has(s.area_id) && s.status === 'active').length;
+  }, [activeAreas, sections]);
+
+  const totalModelsInWarehouse = useMemo(() => {
+    const activeAreaIdSet = new Set(activeAreas.map((a) => a.id));
+    const activeSectionIdSet = new Set(
+      sections.filter((s) => activeAreaIdSet.has(s.area_id) && s.status === 'active').map((s) => s.id)
+    );
+    return modelSections.filter((ms) => activeSectionIdSet.has(ms.section_id)).length;
+  }, [activeAreas, sections, modelSections]);
+
+  const handleConfirmDeleteSection = async () => {
+    if (!sectionToDelete) return;
+    setIsDeleting(true);
+    try {
+      const result = await db.deleteSectionWithCascade(sectionToDelete.id);
+      setDeleteToast(
+        `Rayon "${sectionToDelete.name}" et ${result.deletedModelsCount} modèle(s) supprimé(s)`
+      );
+      setSectionToDelete(null);
+      onRefreshData();
+      setTimeout(() => setDeleteToast(null), 4000);
+    } catch (err) {
+      console.error('Failed to delete section:', err);
+      alert('Erreur lors de la suppression du rayon');
+    } finally {
+      setIsDeleting(false);
+    }
+  };
+
+  const handleConfirmDeleteArea = async () => {
+    if (!areaToDelete) return;
+    setIsDeleting(true);
+    try {
+      const result = await db.deleteAreaWithCascade(areaToDelete.id);
+      setDeleteToast(
+        `Zone "${areaToDelete.name}", ${result.deletedSectionsCount} rayon(s) et ${result.deletedModelsCount} modèle(s) supprimés`
+      );
+      setAreaToDelete(null);
+      onRefreshData();
+      setTimeout(() => setDeleteToast(null), 4000);
+    } catch (err) {
+      console.error('Failed to delete area:', err);
+      alert('Erreur lors de la suppression de la zone');
+    } finally {
+      setIsDeleting(false);
+    }
+  };
 
   // Handle Add Area (FR-2.1)
   const handleCreateArea = async (e: React.FormEvent) => {
@@ -185,65 +322,113 @@ export const CatalogTab: React.FC<CatalogTabProps> = ({
     onRefreshData();
   };
 
-  // CSV Validation before commit (FR-9.2)
-  const handleValidateCsv = () => {
-    const res = parseCsvText(csvContent);
-    setCsvValidationErrors(res.errors);
-    setParsedRows(res.validRows);
+  // CSV Content Change with Instant Format Detection & Validation
+  const handleCsvChange = (text: string) => {
+    setCsvContent(text);
+    setImportSuccessMessage(null);
+    const fmt = detectCsvFormat(text);
+    setDetectedFormat(fmt);
+
+    if (fmt === 'v2') {
+      const res = parseV2DatabaseCsv(text);
+      setParsedV2Data(res);
+      setCsvValidationErrors(res.errors);
+      setParsedRows([]);
+    } else if (fmt === 'v3') {
+      const res = parseCsvText(text);
+      setParsedRows(res.validRows);
+      setCsvValidationErrors(res.errors);
+      setParsedV2Data(null);
+    } else {
+      setParsedV2Data(null);
+      setParsedRows([]);
+      setCsvValidationErrors([]);
+    }
   };
 
-  // Commit valid CSV rows
-  const handleCommitCsv = async () => {
-    if (parsedRows.length === 0 || !activeWarehouse) return;
+  // 1-Click Load bundled V2 Database
+  const handleLoadOriginalV2 = async () => {
+    try {
+      setIsLoadingOriginalV2(true);
+      setImportSuccessMessage(null);
+      const resp = await fetch('/v2_database.csv');
+      if (!resp.ok) throw new Error('Could not fetch /v2_database.csv');
+      const text = await resp.text();
+      handleCsvChange(text);
+    } catch (err) {
+      console.error('Failed to load v2_database.csv:', err);
+      setCsvValidationErrors([{ line: 1, message: 'Could not load /v2_database.csv. Please upload it manually.' }]);
+    } finally {
+      setIsLoadingOriginalV2(false);
+    }
+  };
 
-    const now = new Date().toISOString();
-    let importedCount = 0;
-
-    for (const row of parsedRows) {
-      const modelId = 'model-' + Date.now() + '-' + Math.random().toString(36).substring(2, 6);
-
-      await db.put('models', {
-        id: modelId,
-        warehouse_id: activeWarehouse.id,
-        reference_code: row.reference_code,
-        name: row.name || null,
-        size_range: row.size_range || null,
-        price: row.price || null,
-        photo_url: row.photo_url || null,
-        status: 'active',
-        created_at: now,
-        updated_at: now,
-        version: 1,
-        is_dirty: true,
-        local_sync_status: 'pending',
-      });
-
-      // If section specified, look up or assign
-      if (row.section_name) {
-        const sec = sections.find(
-          (s) => s.name.toLowerCase() === row.section_name?.toLowerCase()
-        );
-        if (sec) {
-          await db.put('model_sections', {
-            id: 'ms-' + Date.now() + '-' + Math.random().toString(36).substring(2, 6),
-            model_id: modelId,
-            section_id: sec.id,
-            assigned_at: now,
-            updated_at: now,
-            version: 1,
-            is_dirty: true,
-            local_sync_status: 'pending',
-          });
-        }
+  // Upload CSV File
+  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (evt) => {
+      const text = evt.target?.result as string;
+      if (text) {
+        handleCsvChange(text);
       }
-      importedCount++;
+    };
+    reader.readAsText(file);
+    e.target.value = '';
+  };
+
+  // Manual re-validation trigger
+  const handleValidateCsv = () => {
+    handleCsvChange(csvContent);
+  };
+
+  // Commit valid CSV rows (Ultra-fast bulk import for both V2 and V3)
+  const handleCommitCsv = async () => {
+    const effectiveWarehouseId = targetWarehouseIdForImport || activeWarehouse?.id || warehouses[0]?.id;
+    if (!effectiveWarehouseId) {
+      setCsvValidationErrors([{ line: 1, message: 'Please select a destination warehouse.' }]);
+      return;
     }
 
-    setImportSuccessMessage(`${importedCount} modèle(s) importé(s) avec succès !`);
-    setCsvContent('');
-    setParsedRows([]);
-
-    onRefreshData();
+    setIsImporting(true);
+    try {
+      if (detectedFormat === 'v2' && parsedV2Data && parsedV2Data.products.length > 0) {
+        const result = await importV2DatabaseToDb(
+          parsedV2Data,
+          effectiveWarehouseId,
+          areas,
+          sections
+        );
+        const whName = warehouses.find((w) => w.id === effectiveWarehouseId)?.name || 'Selected Warehouse';
+        setImportSuccessMessage(
+          `Successfully imported ${result.modelsCreated.toLocaleString()} models and ${result.sectionsCreated} sections across ${result.areasCreated} zones into "${whName}"!`
+        );
+        setCsvContent('');
+        setParsedV2Data(null);
+        setDetectedFormat('unknown');
+        onRefreshData();
+      } else if (detectedFormat === 'v3' && parsedRows.length > 0) {
+        const result = await importStandardCsvToDb(
+          parsedRows,
+          effectiveWarehouseId,
+          sections
+        );
+        const whName = warehouses.find((w) => w.id === effectiveWarehouseId)?.name || 'Selected Warehouse';
+        setImportSuccessMessage(
+          `Successfully imported ${result.modelsCreated.toLocaleString()} models into "${whName}"!`
+        );
+        setCsvContent('');
+        setParsedRows([]);
+        setDetectedFormat('unknown');
+        onRefreshData();
+      }
+    } catch (err) {
+      console.error('Import failed:', err);
+      setCsvValidationErrors([{ line: 1, message: 'Database import failed. Please check the console for details.' }]);
+    } finally {
+      setIsImporting(false);
+    }
   };
 
   // Export full catalog to CSV (FR-9.1)
@@ -255,160 +440,522 @@ export const CatalogTab: React.FC<CatalogTabProps> = ({
 
   return (
     <div className="fade-in">
-      {/* Sub-tab Switcher & Export */}
+      {/* Navigation Subtabs with Sleek Segmented Control */}
       <div
         style={{
           display: 'flex',
           justifyContent: 'space-between',
           alignItems: 'center',
+          gap: '0.5rem',
+          marginBottom: '1rem',
           flexWrap: 'wrap',
-          gap: '0.75rem',
-          marginBottom: '1.25rem',
         }}
       >
-        <div style={{ display: 'flex', gap: '0.45rem' }}>
+        <div
+          style={{
+            display: 'flex',
+            background: 'var(--bg-card)',
+            border: '1px solid var(--border-default)',
+            borderRadius: 'var(--radius-md)',
+            padding: '3px',
+            gap: '3px',
+            flex: '1 1 auto',
+          }}
+        >
           <button
             type="button"
             onClick={() => setActiveSubTab('structure')}
-            className={`btn ${activeSubTab === 'structure' ? 'btn-primary' : 'btn-secondary'}`}
-            style={{ padding: '0.45rem 0.9rem', fontSize: '0.82rem' }}
+            style={{
+              flex: 1,
+              padding: '0.45rem 0.65rem',
+              fontSize: '0.8rem',
+              fontWeight: 700,
+              borderRadius: 'var(--radius-sm)',
+              border: 'none',
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: '0.35rem',
+              background: activeSubTab === 'structure' ? 'var(--accent)' : 'transparent',
+              color: activeSubTab === 'structure' ? '#FFFFFF' : 'var(--text-secondary)',
+              transition: 'all 0.15s ease',
+              whiteSpace: 'nowrap',
+            }}
           >
-            <FolderTree size={16} />
+            <FolderTree size={15} />
             <span>Zones & Rayons</span>
           </button>
 
           <button
             type="button"
             onClick={() => setActiveSubTab('models')}
-            className={`btn ${activeSubTab === 'models' ? 'btn-primary' : 'btn-secondary'}`}
-            style={{ padding: '0.45rem 0.9rem', fontSize: '0.82rem' }}
+            style={{
+              flex: 1,
+              padding: '0.45rem 0.65rem',
+              fontSize: '0.8rem',
+              fontWeight: 700,
+              borderRadius: 'var(--radius-sm)',
+              border: 'none',
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: '0.35rem',
+              background: activeSubTab === 'models' ? 'var(--accent)' : 'transparent',
+              color: activeSubTab === 'models' ? '#FFFFFF' : 'var(--text-secondary)',
+              transition: 'all 0.15s ease',
+              whiteSpace: 'nowrap',
+            }}
           >
-            <Layers size={16} />
+            <Layers size={15} />
             <span>Catalogue ({models.length})</span>
           </button>
 
           <button
             type="button"
             onClick={() => setActiveSubTab('import')}
-            className={`btn ${activeSubTab === 'import' ? 'btn-primary' : 'btn-secondary'}`}
-            style={{ padding: '0.45rem 0.9rem', fontSize: '0.82rem' }}
+            style={{
+              flex: 1,
+              padding: '0.45rem 0.65rem',
+              fontSize: '0.8rem',
+              fontWeight: 700,
+              borderRadius: 'var(--radius-sm)',
+              border: 'none',
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: '0.35rem',
+              background: activeSubTab === 'import' ? 'var(--accent)' : 'transparent',
+              color: activeSubTab === 'import' ? '#FFFFFF' : 'var(--text-secondary)',
+              transition: 'all 0.15s ease',
+              whiteSpace: 'nowrap',
+            }}
           >
-            <FileSpreadsheet size={16} />
-            <span>Import CSV</span>
+            <FileSpreadsheet size={15} />
+            <span>Import</span>
           </button>
         </div>
 
-        {/* CSV Export Button (FR-9.1) */}
         <button
           type="button"
           onClick={handleExportCsv}
           className="btn btn-secondary"
-          style={{ padding: '0.45rem 0.85rem', fontSize: '0.82rem', gap: '0.4rem' }}
+          style={{
+            padding: '0.45rem 0.65rem',
+            fontSize: '0.78rem',
+            height: '36px',
+            flexShrink: 0,
+            gap: '0.3rem',
+          }}
           title="Exporter tout le catalogue au format CSV"
         >
-          <Download size={15} style={{ color: 'var(--accent)' }} />
-          <span>Export CSV</span>
+          <Download size={14} style={{ color: 'var(--accent)' }} />
+          <span>Export</span>
         </button>
       </div>
 
       {/* 1. Structure View: Zones & Rayons Drilldown */}
       {activeSubTab === 'structure' && (
         <div className="fade-in">
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
-            <h3 style={{ fontSize: '1.05rem', fontWeight: 800 }}>
-              Structure : {activeWarehouse?.name}
-            </h3>
+          {/* Warehouse Header Bar */}
+          <div
+            style={{
+              background: 'var(--bg-card)',
+              border: '1px solid var(--border-default)',
+              borderRadius: 'var(--radius-md)',
+              padding: '0.85rem 1rem',
+              marginBottom: '1rem',
+              display: 'flex',
+              flexDirection: 'column',
+              gap: '0.75rem',
+            }}
+          >
+            <div
+              style={{
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+                flexWrap: 'wrap',
+                gap: '0.5rem',
+              }}
+            >
+              <div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', marginBottom: '0.15rem' }}>
+                  <span className="badge badge-amber" style={{ fontSize: '0.68rem', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                    Dépôt Actif
+                  </span>
+                  <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
+                    {activeWarehouse?.name}
+                  </span>
+                </div>
+                <div style={{ fontWeight: 800, fontSize: '1.05rem', color: 'var(--text-primary)' }}>
+                  Architecture du Dépôt
+                </div>
+                <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', marginTop: '0.1rem' }}>
+                  {activeAreas.length} zone(s) • {totalActiveSections} rayon(s) • {totalModelsInWarehouse} modèle(s)
+                </div>
+              </div>
 
-            <div style={{ display: 'flex', gap: '0.5rem' }}>
+              <div style={{ display: 'flex', gap: '0.4rem' }}>
+                <button
+                  type="button"
+                  onClick={() => setIsAddAreaOpen(true)}
+                  className="btn btn-secondary"
+                  style={{ padding: '0.35rem 0.65rem', fontSize: '0.78rem', gap: '0.3rem' }}
+                >
+                  <Plus size={13} />
+                  <span>Zone</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (activeAreas.length > 0) setTargetAreaId(activeAreas[0].id);
+                    setIsAddSectionOpen(true);
+                  }}
+                  disabled={activeAreas.length === 0}
+                  className="btn btn-primary"
+                  style={{ padding: '0.35rem 0.65rem', fontSize: '0.78rem', gap: '0.3rem' }}
+                >
+                  <Plus size={13} />
+                  <span>Rayon(s)</span>
+                </button>
+              </div>
+            </div>
+
+            {/* Quick Shelf / Zone Filter Search & Expand Toggle */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+              <div style={{ position: 'relative', flex: 1 }}>
+                <Search
+                  size={15}
+                  style={{
+                    position: 'absolute',
+                    left: '0.7rem',
+                    top: '50%',
+                    transform: 'translateY(-50%)',
+                    color: 'var(--text-muted)',
+                  }}
+                />
+                <input
+                  type="text"
+                  className="input-control"
+                  placeholder="Filtrer un rayon ou zone (ex: B1, D27, Zone C)..."
+                  value={structureSearch}
+                  onChange={(e) => setStructureSearch(e.target.value)}
+                  style={{
+                    paddingLeft: '2.1rem',
+                    paddingRight: structureSearch ? '2rem' : '0.75rem',
+                    fontSize: '0.8125rem',
+                    minHeight: '36px',
+                  }}
+                />
+                {structureSearch && (
+                  <button
+                    type="button"
+                    onClick={() => setStructureSearch('')}
+                    style={{
+                      position: 'absolute',
+                      right: '0.5rem',
+                      top: '50%',
+                      transform: 'translateY(-50%)',
+                      background: 'transparent',
+                      border: 'none',
+                      color: 'var(--text-muted)',
+                      cursor: 'pointer',
+                      padding: '2px',
+                    }}
+                  >
+                    <X size={15} />
+                  </button>
+                )}
+              </div>
+
               <button
                 type="button"
-                onClick={() => setIsAddAreaOpen(true)}
+                onClick={handleToggleAllAreas}
                 className="btn btn-secondary"
-                style={{ padding: '0.4rem 0.75rem', fontSize: '0.78rem' }}
+                style={{ padding: '0.35rem 0.6rem', fontSize: '0.72rem', whiteSpace: 'nowrap', minHeight: '36px' }}
+                title="Déplier ou replier toutes les zones"
               >
-                <Plus size={14} />
-                <span>Créer Zone</span>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => {
-                  if (activeAreas.length > 0) setTargetAreaId(activeAreas[0].id);
-                  setIsAddSectionOpen(true);
-                }}
-                disabled={activeAreas.length === 0}
-                className="btn btn-primary"
-                style={{ padding: '0.4rem 0.75rem', fontSize: '0.78rem' }}
-              >
-                <Plus size={14} />
-                <span>Créer Rayon(s)</span>
+                {expandedAreaIds.size === activeAreas.length ? 'Tout replier' : 'Tout déplier'}
               </button>
             </div>
           </div>
 
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-            {activeAreas.map((area) => {
-              const areaSections = sections.filter(
-                (s) => s.area_id === area.id && s.status === 'active'
-              );
+          {/* Collapsible Zones List */}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+            {activeAreas
+              .filter((area) => {
+                if (!structureSearch.trim()) return true;
+                const q = structureSearch.trim().toUpperCase();
+                if (area.name.toUpperCase().includes(q)) return true;
+                return sections.some(
+                  (s) => s.area_id === area.id && s.status === 'active' && s.name.toUpperCase().includes(q)
+                );
+              })
+              .map((area) => {
+                const areaSections = sections.filter((s) => {
+                  if (s.area_id !== area.id || s.status !== 'active') return false;
+                  if (!structureSearch.trim()) return true;
+                  const q = structureSearch.trim().toUpperCase();
+                  return s.name.toUpperCase().includes(q) || area.name.toUpperCase().includes(q);
+                });
 
-              return (
-                <div key={area.id} className="card" style={{ padding: '1rem' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.75rem' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                      <MapPin size={18} style={{ color: 'var(--accent)' }} />
-                      <h4 style={{ fontSize: '1rem', fontWeight: 800 }}>{area.name}</h4>
-                      <span className="badge badge-neutral" style={{ fontSize: '0.7rem' }}>
-                        {areaSections.length} rayon(s)
-                      </span>
-                    </div>
+                const isExpanded = expandedAreaIds.has(area.id);
+                const areaModelsCount = areaSections.reduce(
+                  (acc, s) => acc + (sectionModelCountMap.get(s.id) || 0),
+                  0
+                );
 
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setTargetAreaId(area.id);
-                        setIsAddSectionOpen(true);
+                return (
+                  <div
+                    key={area.id}
+                    className="card"
+                    style={{
+                      padding: 0,
+                      overflow: 'hidden',
+                      border: '1px solid var(--border-default)',
+                    }}
+                  >
+                    {/* Collapsible Area Header */}
+                    <div
+                      onClick={() => toggleAreaExpand(area.id)}
+                      style={{
+                        padding: '0.75rem 1rem',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                        background: isExpanded ? 'var(--bg-page)' : '#FFFFFF',
+                        cursor: 'pointer',
+                        userSelect: 'none',
+                        borderBottom: isExpanded ? '1px solid var(--border-default)' : 'none',
+                        transition: 'background 0.15s ease',
                       }}
-                      className="btn btn-secondary"
-                      style={{ padding: '0.3rem 0.65rem', fontSize: '0.72rem' }}
                     >
-                      + Rayon
-                    </button>
-                  </div>
-
-                  {/* Section Grid */}
-                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: '0.65rem' }}>
-                    {areaSections.map((sec) => {
-                      const prodsInSection = modelSections.filter((ms) => ms.section_id === sec.id);
-
-                      return (
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem' }}>
                         <div
-                          key={sec.id}
                           style={{
-                            background: 'var(--bg-page)',
-                            border: '1px solid var(--border-default)',
-                            borderRadius: 'var(--radius-md)',
-                            padding: '0.75rem',
+                            color: 'var(--text-secondary)',
+                            display: 'flex',
+                            alignItems: 'center',
                           }}
                         >
-                          <div style={{ fontWeight: 700, fontSize: '0.9rem', color: 'var(--text-primary)' }}>
-                            {sec.name}
-                          </div>
-                          {sec.capacity && (
-                            <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>
-                              Capacité : {sec.capacity}
-                            </div>
-                          )}
-                          <div style={{ marginTop: '0.45rem', fontSize: '0.75rem', color: 'var(--text-secondary)' }}>
-                            {prodsInSection.length} modèle(s) présent(s)
+                          {isExpanded ? <ChevronDown size={18} /> : <ChevronRight size={18} />}
+                        </div>
+
+                        <div
+                          style={{
+                            width: '28px',
+                            height: '28px',
+                            borderRadius: 'var(--radius-sm)',
+                            background: 'var(--accent-light)',
+                            color: 'var(--accent-dark)',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            flexShrink: 0,
+                          }}
+                        >
+                          <MapPin size={15} />
+                        </div>
+
+                        <div>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '0.45rem', flexWrap: 'wrap' }}>
+                            <span style={{ fontSize: '0.95rem', fontWeight: 800, color: 'var(--text-primary)' }}>
+                              {area.name}
+                            </span>
+                            <span
+                              className="badge badge-neutral"
+                              style={{ fontSize: '0.7rem', padding: '0.1rem 0.45rem' }}
+                            >
+                              {areaSections.length} rayon{areaSections.length > 1 ? 's' : ''}
+                            </span>
+                            <span
+                              style={{
+                                fontSize: '0.7rem',
+                                color: 'var(--text-muted)',
+                              }}
+                            >
+                              • {areaModelsCount} modèle{areaModelsCount > 1 ? 's' : ''}
+                            </span>
                           </div>
                         </div>
-                      );
-                    })}
+                      </div>
+
+                      {/* Area Actions */}
+                      <div
+                        style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }}
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setTargetAreaId(area.id);
+                            setIsAddSectionOpen(true);
+                          }}
+                          className="btn btn-secondary"
+                          style={{ padding: '0.25rem 0.55rem', fontSize: '0.72rem', minHeight: '30px' }}
+                        >
+                          + Rayon
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setAreaToDelete({
+                              id: area.id,
+                              name: area.name,
+                              sectionsCount: areaSections.length,
+                              modelsCount: areaModelsCount,
+                            })
+                          }
+                          className="btn btn-secondary"
+                          style={{
+                            padding: '0.25rem 0.5rem',
+                            fontSize: '0.72rem',
+                            minHeight: '30px',
+                            color: 'var(--text-muted)',
+                          }}
+                          onMouseEnter={(e) => {
+                            e.currentTarget.style.color = 'var(--danger)';
+                            e.currentTarget.style.borderColor = '#FCA5A5';
+                            e.currentTarget.style.background = '#FEE2E2';
+                          }}
+                          onMouseLeave={(e) => {
+                            e.currentTarget.style.color = 'var(--text-muted)';
+                            e.currentTarget.style.borderColor = 'var(--border-default)';
+                            e.currentTarget.style.background = 'transparent';
+                          }}
+                          title={`Supprimer la zone ${area.name}`}
+                        >
+                          <Trash2 size={14} />
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Expanded Sections Content */}
+                    {isExpanded && (
+                      <div style={{ padding: '0.85rem 1rem' }}>
+                        {areaSections.length === 0 ? (
+                          <div style={{ textAlign: 'center', padding: '1.25rem', color: 'var(--text-muted)', fontSize: '0.82rem' }}>
+                            Aucun rayon ne correspond dans cette zone.{' '}
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setTargetAreaId(area.id);
+                                setIsAddSectionOpen(true);
+                              }}
+                              style={{
+                                background: 'none',
+                                border: 'none',
+                                color: 'var(--accent)',
+                                cursor: 'pointer',
+                                fontWeight: 700,
+                                textDecoration: 'underline',
+                              }}
+                            >
+                              Créer un rayon
+                            </button>
+                          </div>
+                        ) : (
+                          /* Compact Section Grid */
+                          <div
+                            style={{
+                              display: 'grid',
+                              gridTemplateColumns: 'repeat(auto-fill, minmax(170px, 1fr))',
+                              gap: '0.5rem',
+                            }}
+                          >
+                            {areaSections.map((sec) => {
+                              const count = sectionModelCountMap.get(sec.id) || 0;
+
+                              return (
+                                <div
+                                  key={sec.id}
+                                  style={{
+                                    background: '#FFFFFF',
+                                    border: '1px solid var(--border-default)',
+                                    borderRadius: 'var(--radius-md)',
+                                    padding: '0.55rem 0.65rem',
+                                    display: 'flex',
+                                    flexDirection: 'column',
+                                    justifyContent: 'space-between',
+                                    gap: '0.35rem',
+                                    boxShadow: '0 1px 2px rgba(0, 0, 0, 0.03)',
+                                    transition: 'border-color 0.15s ease, transform 0.15s ease',
+                                  }}
+                                >
+                                  <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '0.35rem' }}>
+                                    <div style={{ fontWeight: 700, fontSize: '0.86rem', color: 'var(--text-primary)', wordBreak: 'break-word', lineHeight: 1.25 }}>
+                                      {sec.name}
+                                    </div>
+                                    <button
+                                      type="button"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        setSectionToDelete({
+                                          id: sec.id,
+                                          name: sec.name,
+                                          areaName: area.name,
+                                          modelsCount: count,
+                                        });
+                                      }}
+                                      style={{
+                                        background: 'transparent',
+                                        border: 'none',
+                                        color: 'var(--text-muted)',
+                                        cursor: 'pointer',
+                                        padding: '3px',
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        borderRadius: 'var(--radius-sm)',
+                                        flexShrink: 0,
+                                      }}
+                                      onMouseEnter={(e) => {
+                                        e.currentTarget.style.color = 'var(--danger)';
+                                        e.currentTarget.style.background = '#FEE2E2';
+                                      }}
+                                      onMouseLeave={(e) => {
+                                        e.currentTarget.style.color = 'var(--text-muted)';
+                                        e.currentTarget.style.background = 'transparent';
+                                      }}
+                                      title={`Supprimer le rayon ${sec.name}`}
+                                    >
+                                      <Trash2 size={13} />
+                                    </button>
+                                  </div>
+
+                                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '0.25rem', marginTop: '0.1rem' }}>
+                                    <span
+                                      style={{
+                                        fontSize: '0.7rem',
+                                        fontWeight: 600,
+                                        color: count > 0 ? 'var(--accent-dark)' : 'var(--text-muted)',
+                                        background: count > 0 ? 'var(--accent-light)' : 'var(--bg-input)',
+                                        padding: '0.15rem 0.4rem',
+                                        borderRadius: 'var(--radius-sm)',
+                                      }}
+                                    >
+                                      {count} modèle{count > 1 ? 's' : ''}
+                                    </span>
+                                    {sec.capacity && (
+                                      <span style={{ fontSize: '0.68rem', color: 'var(--text-muted)' }} title={`Capacité: ${sec.capacity}`}>
+                                        {sec.capacity}
+                                      </span>
+                                    )}
+                                  </div>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        )}
+                      </div>
+                    )}
                   </div>
-                </div>
-              );
-            })}
+                );
+              })}
           </div>
         </div>
       )}
@@ -420,7 +967,7 @@ export const CatalogTab: React.FC<CatalogTabProps> = ({
             <h3 style={{ fontSize: '1.05rem', fontWeight: 800 }}>Fiches Modèles ({models.length})</h3>
             <button
               type="button"
-              onClick={() => setIsAddModelOpen(true)}
+              onClick={() => (onOpenQuickAdd ? onOpenQuickAdd() : setIsAddModelOpen(true))}
               className="btn btn-primary"
               style={{ padding: '0.45rem 0.85rem', fontSize: '0.8rem' }}
             >
@@ -481,7 +1028,7 @@ export const CatalogTab: React.FC<CatalogTabProps> = ({
                 <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                   {m.price && (
                     <span className="badge badge-emerald" style={{ fontSize: '0.75rem' }}>
-                      {m.price} DH
+                      {m.price} DA
                     </span>
                   )}
                   <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>
@@ -494,57 +1041,315 @@ export const CatalogTab: React.FC<CatalogTabProps> = ({
         </div>
       )}
 
-      {/* 3. CSV Import View (FR-4.5, FR-9.2) */}
+      {/* 3. CSV & Database Import View */}
       {activeSubTab === 'import' && (
         <div className="card fade-in" style={{ padding: '1.25rem' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
+          {/* Header & Subtitle */}
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '1rem', marginBottom: '1.25rem' }}>
             <div>
-              <h3 style={{ fontSize: '1.05rem', fontWeight: 800 }}>Import CSV en masse</h3>
-              <p style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>
-                Validation automatique des colonnes avant validation
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                <Database size={20} style={{ color: 'var(--brand-primary)' }} />
+                <h3 style={{ fontSize: '1.15rem', fontWeight: 800 }}>Import Catalog & V2 Database</h3>
+              </div>
+              <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginTop: '0.2rem' }}>
+                Import complete V2 database extracts (1,484+ products across 101 sections) or standard V3 spreadsheets.
               </p>
             </div>
 
-            <button
-              type="button"
-              onClick={() => setCsvContent(getCsvTemplate())}
-              className="btn btn-secondary"
-              style={{ padding: '0.4rem 0.75rem', fontSize: '0.78rem' }}
-            >
-              Insérer modèle d'exemple
-            </button>
+            {/* Quick Action Buttons */}
+            <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
+              <input
+                type="file"
+                ref={fileInputRef}
+                accept=".csv,.txt"
+                onChange={handleFileUpload}
+                style={{ display: 'none' }}
+              />
+
+              <button
+                type="button"
+                onClick={handleLoadOriginalV2}
+                disabled={isLoadingOriginalV2}
+                className="btn btn-primary"
+                style={{ fontSize: '0.78rem', padding: '0.45rem 0.85rem', display: 'flex', alignItems: 'center', gap: '0.4rem' }}
+                title="Load the 1,484 models database from v2"
+              >
+                {isLoadingOriginalV2 ? (
+                  <>
+                    <Loader2 size={14} className="spin" />
+                    <span>Loading...</span>
+                  </>
+                ) : (
+                  <>
+                    <Sparkles size={14} />
+                    <span>Load Original V2 Database (1,484 items)</span>
+                  </>
+                )}
+              </button>
+
+              <button
+                type="button"
+                onClick={() => fileInputRef.current?.click()}
+                className="btn btn-secondary"
+                style={{ fontSize: '0.78rem', padding: '0.45rem 0.85rem', display: 'flex', alignItems: 'center', gap: '0.4rem' }}
+              >
+                <Upload size={14} />
+                <span>Upload CSV File</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => handleCsvChange(getCsvTemplate())}
+                className="btn btn-secondary"
+                style={{ fontSize: '0.78rem', padding: '0.45rem 0.85rem', display: 'flex', alignItems: 'center', gap: '0.4rem' }}
+              >
+                <FileSpreadsheet size={14} />
+                <span>V3 Template</span>
+              </button>
+            </div>
           </div>
 
-          <textarea
-            value={csvContent}
-            onChange={(e) => setCsvContent(e.target.value)}
-            rows={8}
-            className="input-control"
-            style={{ fontFamily: 'var(--font-mono)', fontSize: '0.82rem', marginBottom: '1rem' }}
-            placeholder="Collez le texte CSV ici..."
-          />
+          {/* Destination Warehouse Selector */}
+          <div
+            style={{
+              padding: '0.85rem 1rem',
+              background: 'var(--bg-secondary)',
+              borderRadius: 'var(--radius-md)',
+              marginBottom: '1rem',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              flexWrap: 'wrap',
+              gap: '0.75rem',
+            }}
+          >
+            <div>
+              <label style={{ fontSize: '0.78rem', fontWeight: 700, display: 'block', color: 'var(--text-primary)' }}>
+                Target Warehouse Destination:
+              </label>
+              <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>
+                Imported items and sections will be assigned to this warehouse.
+              </span>
+            </div>
 
-          <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '1rem' }}>
-            <button
-              type="button"
-              onClick={handleValidateCsv}
-              disabled={!csvContent.trim()}
-              className="btn btn-secondary"
+            <select
+              value={targetWarehouseIdForImport || activeWarehouse?.id || warehouses[0]?.id || ''}
+              onChange={(e) => setTargetWarehouseIdForImport(e.target.value)}
+              className="input-control"
+              style={{ width: 'auto', minWidth: '220px', padding: '0.4rem 0.65rem', fontSize: '0.82rem' }}
             >
-              1. Valider le format CSV
-            </button>
+              {warehouses.map((w) => (
+                <option key={w.id} value={w.id}>
+                  {w.name} {w.id === activeWarehouse?.id ? '(Active)' : ''}
+                </option>
+              ))}
+            </select>
+          </div>
 
+          {/* Format Detection & Statistics Preview */}
+          {detectedFormat === 'v2' && parsedV2Data && (
+            <div
+              className="fade-in"
+              style={{
+                padding: '1rem',
+                background: 'rgba(59, 130, 246, 0.06)',
+                border: '1px solid rgba(59, 130, 246, 0.25)',
+                borderRadius: 'var(--radius-md)',
+                marginBottom: '1rem',
+              }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.75rem' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.45rem' }}>
+                  <span className="badge badge-primary" style={{ fontSize: '0.75rem', fontWeight: 800 }}>
+                    Detected: V2 Warehouse Database Dump
+                  </span>
+                  <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
+                    Ready for 1-click bulk import
+                  </span>
+                </div>
+              </div>
+
+              {/* Statistics Grid */}
+              <div
+                style={{
+                  display: 'grid',
+                  gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))',
+                  gap: '0.75rem',
+                }}
+              >
+                <div className="card" style={{ padding: '0.65rem 0.85rem', background: 'var(--bg-card)' }}>
+                  <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)', fontWeight: 600, display: 'block' }}>
+                    Source Deposit
+                  </span>
+                  <strong style={{ fontSize: '1rem', color: 'var(--text-primary)' }}>
+                    {parsedV2Data.summary.baseDepositName}
+                  </strong>
+                  <span style={{ fontSize: '0.68rem', color: 'var(--text-secondary)', display: 'block' }}>
+                    ID: 1 (Main Base)
+                  </span>
+                </div>
+
+                <div className="card" style={{ padding: '0.65rem 0.85rem', background: 'var(--bg-card)' }}>
+                  <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)', fontWeight: 600, display: 'block' }}>
+                    Shoe Models
+                  </span>
+                  <strong style={{ fontSize: '1.15rem', color: 'var(--brand-primary)' }}>
+                    {parsedV2Data.products.length.toLocaleString()}
+                  </strong>
+                  <span style={{ fontSize: '0.68rem', color: 'var(--text-secondary)', display: 'block' }}>
+                    All linked to shelves
+                  </span>
+                </div>
+
+                <div className="card" style={{ padding: '0.65rem 0.85rem', background: 'var(--bg-card)' }}>
+                  <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)', fontWeight: 600, display: 'block' }}>
+                    Shelves / Sections
+                  </span>
+                  <strong style={{ fontSize: '1.15rem', color: 'var(--success)' }}>
+                    {parsedV2Data.sections.length}
+                  </strong>
+                  <span style={{ fontSize: '0.68rem', color: 'var(--text-secondary)', display: 'block' }}>
+                    A1-A11, B1-B30, C1-C35, D1-D27
+                  </span>
+                </div>
+
+                <div className="card" style={{ padding: '0.65rem 0.85rem', background: 'var(--bg-card)' }}>
+                  <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)', fontWeight: 600, display: 'block' }}>
+                    Zones Mapped
+                  </span>
+                  <strong style={{ fontSize: '1rem', color: 'var(--text-primary)' }}>
+                    {parsedV2Data.summary.zones.length} Zones
+                  </strong>
+                  <span style={{ fontSize: '0.68rem', color: 'var(--text-secondary)', display: 'block' }}>
+                    {parsedV2Data.summary.zones.join(', ')}
+                  </span>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {detectedFormat === 'v3' && (
+            <div
+              className="fade-in"
+              style={{
+                padding: '0.75rem 1rem',
+                background: 'rgba(16, 185, 129, 0.08)',
+                border: '1px solid rgba(16, 185, 129, 0.25)',
+                borderRadius: 'var(--radius-md)',
+                marginBottom: '1rem',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+              }}
+            >
+              <div>
+                <span className="badge badge-emerald" style={{ fontSize: '0.75rem', fontWeight: 800 }}>
+                  Detected: V3 Standard Catalog CSV
+                </span>
+                <span style={{ fontSize: '0.8rem', marginLeft: '0.5rem', color: 'var(--text-secondary)' }}>
+                  {parsedRows.length} valid row(s) ready to import
+                </span>
+              </div>
+            </div>
+          )}
+
+          {/* Raw CSV Textarea */}
+          <div style={{ position: 'relative', marginBottom: '1rem' }}>
+            <textarea
+              value={csvContent}
+              onChange={(e) => handleCsvChange(e.target.value)}
+              rows={8}
+              className="input-control"
+              style={{ fontFamily: 'var(--font-mono)', fontSize: '0.82rem', paddingBottom: '1.75rem' }}
+              placeholder="Paste raw CSV content here, click 'Upload CSV File', or click 'Load Original V2 Database' above..."
+            />
+            {csvContent.trim() && (
+              <span
+                style={{
+                  position: 'absolute',
+                  bottom: '8px',
+                  right: '12px',
+                  fontSize: '0.7rem',
+                  color: 'var(--text-muted)',
+                  fontFamily: 'var(--font-mono)',
+                  background: 'var(--bg-card)',
+                  padding: '2px 6px',
+                  borderRadius: '4px',
+                  border: '1px solid var(--border-color)',
+                }}
+              >
+                {csvContent.split(/\r?\n/).filter(Boolean).length} lines
+              </span>
+            )}
+          </div>
+
+          {/* Action Buttons */}
+          <div style={{ display: 'flex', gap: '0.65rem', flexWrap: 'wrap', marginBottom: '1rem' }}>
             <button
               type="button"
               onClick={handleCommitCsv}
-              disabled={parsedRows.length === 0 || csvValidationErrors.length > 0}
+              disabled={
+                isImporting ||
+                (detectedFormat === 'v2' && (!parsedV2Data || parsedV2Data.products.length === 0)) ||
+                (detectedFormat === 'v3' && parsedRows.length === 0) ||
+                (detectedFormat === 'unknown' && !csvContent.trim())
+              }
               className="btn btn-primary"
+              style={{ minWidth: '220px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem' }}
             >
-              2. Importer ({parsedRows.length} lignes valides)
+              {isImporting ? (
+                <>
+                  <Loader2 size={16} className="spin" />
+                  <span>Importing into Database...</span>
+                </>
+              ) : detectedFormat === 'v2' && parsedV2Data ? (
+                <>
+                  <Sparkles size={16} />
+                  <span>
+                    Import V2 Database ({parsedV2Data.products.length.toLocaleString()} Items & {parsedV2Data.sections.length} Shelves)
+                  </span>
+                </>
+              ) : detectedFormat === 'v3' ? (
+                <>
+                  <Upload size={16} />
+                  <span>Import {parsedRows.length} Items</span>
+                </>
+              ) : (
+                <>
+                  <Upload size={16} />
+                  <span>Import Data</span>
+                </>
+              )}
             </button>
+
+            <button
+              type="button"
+              onClick={handleValidateCsv}
+              disabled={!csvContent.trim() || isImporting}
+              className="btn btn-secondary"
+            >
+              Re-validate Format
+            </button>
+
+            {csvContent.trim() && (
+              <button
+                type="button"
+                onClick={() => {
+                  setCsvContent('');
+                  setParsedV2Data(null);
+                  setParsedRows([]);
+                  setCsvValidationErrors([]);
+                  setImportSuccessMessage(null);
+                  setDetectedFormat('unknown');
+                }}
+                className="btn btn-secondary"
+              >
+                Clear
+              </button>
+            )}
           </div>
 
-          {/* Validation Errors */}
+          {/* Validation Errors Display */}
           {csvValidationErrors.length > 0 && (
             <div
               style={{
@@ -555,32 +1360,77 @@ export const CatalogTab: React.FC<CatalogTabProps> = ({
                 marginBottom: '1rem',
               }}
             >
-              <h4 style={{ color: 'var(--danger)', fontSize: '0.85rem', fontWeight: 700, marginBottom: '0.35rem' }}>
-                Erreurs de validation détectées :
+              <h4 style={{ color: 'var(--danger)', fontSize: '0.85rem', fontWeight: 700, marginBottom: '0.35rem', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                <AlertCircle size={16} />
+                Validation errors detected :
               </h4>
               <ul style={{ paddingLeft: '1.25rem', fontSize: '0.8rem', color: 'var(--danger)' }}>
-                {csvValidationErrors.map((err, i) => (
+                {csvValidationErrors.slice(0, 8).map((err, i) => (
                   <li key={i}>
-                    Ligne {err.line} : {err.message}
+                    Line {err.line} : {err.message}
                   </li>
                 ))}
+                {csvValidationErrors.length > 8 && (
+                  <li style={{ fontStyle: 'italic', marginTop: '0.25rem' }}>
+                    ... and {csvValidationErrors.length - 8} more errors.
+                  </li>
+                )}
               </ul>
             </div>
           )}
 
+          {/* Success Banner */}
           {importSuccessMessage && (
             <div
+              className="fade-in"
               style={{
-                padding: '0.85rem',
+                padding: '1rem',
                 background: 'var(--success-light)',
                 border: '1px solid var(--success)',
                 borderRadius: 'var(--radius-md)',
                 color: 'var(--success)',
-                fontSize: '0.85rem',
-                fontWeight: 700,
+                marginBottom: '1rem',
               }}
             >
-              {importSuccessMessage}
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontWeight: 800, fontSize: '0.9rem', marginBottom: '0.5rem' }}>
+                <CheckCircle size={18} />
+                <span>{importSuccessMessage}</span>
+              </div>
+              <p style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', marginBottom: '0.75rem' }}>
+                All records have been saved into offline IndexedDB and are immediately available for searching, barcode scanning, and stock transfers.
+              </p>
+
+              <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
+                {onNavigateToSearch && (
+                  <button
+                    type="button"
+                    onClick={() => onNavigateToSearch('545-81')}
+                    className="btn btn-primary"
+                    style={{ fontSize: '0.78rem', padding: '0.4rem 0.75rem', display: 'flex', alignItems: 'center', gap: '0.35rem' }}
+                  >
+                    <Search size={14} />
+                    <span>Test Search (e.g. 545-81)</span>
+                  </button>
+                )}
+                <button
+                  type="button"
+                  onClick={() => setActiveSubTab('structure')}
+                  className="btn btn-secondary"
+                  style={{ fontSize: '0.78rem', padding: '0.4rem 0.75rem', display: 'flex', alignItems: 'center', gap: '0.35rem' }}
+                >
+                  <Layers size={14} />
+                  <span>View Shelf Structure</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setActiveSubTab('models')}
+                  className="btn btn-secondary"
+                  style={{ fontSize: '0.78rem', padding: '0.4rem 0.75rem', display: 'flex', alignItems: 'center', gap: '0.35rem' }}
+                >
+                  <FileText size={14} />
+                  <span>View All Models</span>
+                </button>
+              </div>
             </div>
           )}
         </div>
@@ -592,7 +1442,9 @@ export const CatalogTab: React.FC<CatalogTabProps> = ({
           style={{
             position: 'fixed',
             inset: 0,
-            background: 'rgba(0,0,0,0.3)',
+            background: 'rgba(15, 23, 42, 0.45)',
+            backdropFilter: 'blur(4px)',
+            WebkitBackdropFilter: 'blur(4px)',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
@@ -600,7 +1452,19 @@ export const CatalogTab: React.FC<CatalogTabProps> = ({
             zIndex: 250,
           }}
         >
-          <div className="card" style={{ width: '100%', maxWidth: '420px', padding: '1.5rem' }}>
+          <div
+            className="card fade-in"
+            style={{
+              width: '100%',
+              maxWidth: '420px',
+              background: '#FFFFFF',
+              color: 'var(--text-primary)',
+              borderRadius: 'var(--radius-lg)',
+              boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.05)',
+              border: '1px solid var(--border-default)',
+              padding: '1.5rem',
+            }}
+          >
             <h3 style={{ fontSize: '1.1rem', fontWeight: 800, marginBottom: '1rem' }}>
               Nouvelle Zone ({activeWarehouse?.name})
             </h3>
@@ -637,7 +1501,9 @@ export const CatalogTab: React.FC<CatalogTabProps> = ({
           style={{
             position: 'fixed',
             inset: 0,
-            background: 'rgba(0,0,0,0.3)',
+            background: 'rgba(15, 23, 42, 0.45)',
+            backdropFilter: 'blur(4px)',
+            WebkitBackdropFilter: 'blur(4px)',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
@@ -645,7 +1511,19 @@ export const CatalogTab: React.FC<CatalogTabProps> = ({
             zIndex: 250,
           }}
         >
-          <div className="card" style={{ width: '100%', maxWidth: '440px', padding: '1.5rem' }}>
+          <div
+            className="card fade-in"
+            style={{
+              width: '100%',
+              maxWidth: '440px',
+              background: '#FFFFFF',
+              color: 'var(--text-primary)',
+              borderRadius: 'var(--radius-lg)',
+              boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.05)',
+              border: '1px solid var(--border-default)',
+              padding: '1.5rem',
+            }}
+          >
             <h3 style={{ fontSize: '1.1rem', fontWeight: 800, marginBottom: '1rem' }}>
               Nouveau Rayon / Emplacement
             </h3>
@@ -730,7 +1608,9 @@ export const CatalogTab: React.FC<CatalogTabProps> = ({
           style={{
             position: 'fixed',
             inset: 0,
-            background: 'rgba(0,0,0,0.3)',
+            background: 'rgba(15, 23, 42, 0.45)',
+            backdropFilter: 'blur(4px)',
+            WebkitBackdropFilter: 'blur(4px)',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
@@ -738,7 +1618,19 @@ export const CatalogTab: React.FC<CatalogTabProps> = ({
             zIndex: 250,
           }}
         >
-          <div className="card" style={{ width: '100%', maxWidth: '460px', padding: '1.5rem' }}>
+          <div
+            className="card fade-in"
+            style={{
+              width: '100%',
+              maxWidth: '460px',
+              background: '#FFFFFF',
+              color: 'var(--text-primary)',
+              borderRadius: 'var(--radius-lg)',
+              boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.05)',
+              border: '1px solid var(--border-default)',
+              padding: '1.5rem',
+            }}
+          >
             <h3 style={{ fontSize: '1.1rem', fontWeight: 800, marginBottom: '0.25rem' }}>
               Ajouter une fiche modèle
             </h3>
@@ -789,7 +1681,7 @@ export const CatalogTab: React.FC<CatalogTabProps> = ({
                 </div>
                 <div style={{ flex: 1 }}>
                   <label style={{ display: 'block', fontSize: '0.78rem', fontWeight: 700, marginBottom: '0.25rem' }}>
-                    Prix (DH) :
+                    Prix (DA) :
                   </label>
                   <input
                     type="number"
@@ -806,18 +1698,13 @@ export const CatalogTab: React.FC<CatalogTabProps> = ({
                 <label style={{ display: 'block', fontSize: '0.78rem', fontWeight: 700, marginBottom: '0.25rem' }}>
                   Associer immédiatement à un rayon :
                 </label>
-                <select
-                  value={newModelSectionId}
-                  onChange={(e) => setNewModelSectionId(e.target.value)}
-                  className="input-control"
-                >
-                  <option value="">-- Aucun pour l’instant --</option>
-                  {sections.map((s) => (
-                    <option key={s.id} value={s.id}>
-                      {s.name}
-                    </option>
-                  ))}
-                </select>
+                <SectionSearchSelect
+                  sections={sections}
+                  areas={areas}
+                  selectedSectionId={newModelSectionId}
+                  onSelectSection={setNewModelSectionId}
+                  placeholder="Rechercher un rayon (optionnel)..."
+                />
               </div>
 
               <div style={{ display: 'flex', gap: '0.5rem', marginTop: '0.5rem' }}>
@@ -833,6 +1720,271 @@ export const CatalogTab: React.FC<CatalogTabProps> = ({
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Toast Notification for Deletion */}
+      {deleteToast && (
+        <div
+          className="fade-in"
+          style={{
+            position: 'fixed',
+            bottom: '5rem',
+            left: '50%',
+            transform: 'translateX(-50%)',
+            background: 'var(--text-primary)',
+            color: '#FFFFFF',
+            padding: '0.65rem 1.15rem',
+            borderRadius: 'var(--radius-full)',
+            fontSize: '0.82rem',
+            fontWeight: 600,
+            boxShadow: '0 8px 24px rgba(0, 0, 0, 0.2)',
+            zIndex: 1200,
+            display: 'flex',
+            alignItems: 'center',
+            gap: '0.5rem',
+            maxWidth: '90vw',
+            textAlign: 'center',
+          }}
+        >
+          <CheckCircle size={16} style={{ color: '#34D399', flexShrink: 0 }} />
+          <span>{deleteToast}</span>
+        </div>
+      )}
+
+      {/* Delete Section Modal with Cascade Models Warning */}
+      {sectionToDelete && (
+        <div
+          style={{
+            position: 'fixed',
+            inset: 0,
+            background: 'rgba(15, 23, 42, 0.45)',
+            backdropFilter: 'blur(4px)',
+            WebkitBackdropFilter: 'blur(4px)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            padding: '1rem',
+            zIndex: 1100,
+          }}
+        >
+          <div
+            className="card fade-in"
+            style={{
+              width: '100%',
+              maxWidth: '420px',
+              background: '#FFFFFF',
+              color: 'var(--text-primary)',
+              borderRadius: 'var(--radius-lg)',
+              boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.05)',
+              border: '1px solid var(--border-default)',
+              padding: '1.5rem',
+            }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem', marginBottom: '1rem' }}>
+              <div
+                style={{
+                  width: '36px',
+                  height: '36px',
+                  borderRadius: 'var(--radius-md)',
+                  background: '#FEE2E2',
+                  color: 'var(--danger)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  flexShrink: 0,
+                }}
+              >
+                <Trash2 size={18} />
+              </div>
+              <div>
+                <h3 style={{ fontSize: '1.1rem', fontWeight: 800 }}>Supprimer le rayon</h3>
+                <span style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>
+                  {sectionToDelete.areaName} • {sectionToDelete.name}
+                </span>
+              </div>
+            </div>
+
+            <div
+              style={{
+                padding: '0.75rem',
+                borderRadius: 'var(--radius-md)',
+                background: sectionToDelete.modelsCount > 0 ? '#FEF2F2' : 'var(--bg-input)',
+                border: sectionToDelete.modelsCount > 0 ? '1px solid #FECACA' : '1px solid var(--border-default)',
+                marginBottom: '1.25rem',
+                fontSize: '0.82rem',
+                lineHeight: 1.45,
+                color: sectionToDelete.modelsCount > 0 ? '#991B1B' : 'var(--text-secondary)',
+              }}
+            >
+              {sectionToDelete.modelsCount > 0 ? (
+                <div>
+                  <div style={{ fontWeight: 700, display: 'flex', alignItems: 'center', gap: '0.35rem', marginBottom: '0.25rem' }}>
+                    <AlertTriangle size={15} style={{ color: 'var(--danger)' }} />
+                    <span>Suppression en cascade</span>
+                  </div>
+                  <div>
+                    Ce rayon contient <strong>{sectionToDelete.modelsCount} modèle(s)</strong>.
+                    La suppression du rayon <strong>supprimera définitivement tous ces modèles</strong> du catalogue.
+                  </div>
+                </div>
+              ) : (
+                <div>Ce rayon est vide. Aucun modèle ne sera affecté.</div>
+              )}
+            </div>
+
+            <div style={{ display: 'flex', gap: '0.5rem' }}>
+              <button
+                type="button"
+                onClick={() => setSectionToDelete(null)}
+                disabled={isDeleting}
+                className="btn btn-secondary"
+                style={{ flex: 1 }}
+              >
+                Annuler
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmDeleteSection}
+                disabled={isDeleting}
+                style={{
+                  flex: 1.2,
+                  background: 'var(--danger)',
+                  color: '#FFFFFF',
+                  border: 'none',
+                  borderRadius: 'var(--radius-md)',
+                  padding: '0.6rem 0.85rem',
+                  fontSize: '0.82rem',
+                  fontWeight: 700,
+                  cursor: isDeleting ? 'not-allowed' : 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: '0.4rem',
+                  opacity: isDeleting ? 0.6 : 1,
+                }}
+              >
+                {isDeleting ? <Loader2 size={16} className="spin" /> : <Trash2 size={16} />}
+                <span>Supprimer</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Delete Area Modal with Cascade Shelves & Models Warning */}
+      {areaToDelete && (
+        <div
+          style={{
+            position: 'fixed',
+            inset: 0,
+            background: 'rgba(15, 23, 42, 0.45)',
+            backdropFilter: 'blur(4px)',
+            WebkitBackdropFilter: 'blur(4px)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            padding: '1rem',
+            zIndex: 1100,
+          }}
+        >
+          <div
+            className="card fade-in"
+            style={{
+              width: '100%',
+              maxWidth: '440px',
+              background: '#FFFFFF',
+              color: 'var(--text-primary)',
+              borderRadius: 'var(--radius-lg)',
+              boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.05)',
+              border: '1px solid var(--border-default)',
+              padding: '1.5rem',
+            }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem', marginBottom: '1rem' }}>
+              <div
+                style={{
+                  width: '36px',
+                  height: '36px',
+                  borderRadius: 'var(--radius-md)',
+                  background: '#FEE2E2',
+                  color: 'var(--danger)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  flexShrink: 0,
+                }}
+              >
+                <Trash2 size={18} />
+              </div>
+              <div>
+                <h3 style={{ fontSize: '1.1rem', fontWeight: 800 }}>Supprimer la zone</h3>
+                <span style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>
+                  {areaToDelete.name}
+                </span>
+              </div>
+            </div>
+
+            <div
+              style={{
+                padding: '0.75rem',
+                borderRadius: 'var(--radius-md)',
+                background: '#FEF2F2',
+                border: '1px solid #FECACA',
+                marginBottom: '1.25rem',
+                fontSize: '0.82rem',
+                lineHeight: 1.45,
+                color: '#991B1B',
+              }}
+            >
+              <div style={{ fontWeight: 700, display: 'flex', alignItems: 'center', gap: '0.35rem', marginBottom: '0.25rem' }}>
+                <AlertTriangle size={15} style={{ color: 'var(--danger)' }} />
+                <span>Suppression complète de la zone</span>
+              </div>
+              <div>
+                Cette action supprimera la zone ainsi que ses{' '}
+                <strong>{areaToDelete.sectionsCount} rayon(s)</strong> et{' '}
+                <strong>{areaToDelete.modelsCount} modèle(s)</strong> associés.
+                Cette action est <strong>irréversible</strong>.
+              </div>
+            </div>
+
+            <div style={{ display: 'flex', gap: '0.5rem' }}>
+              <button
+                type="button"
+                onClick={() => setAreaToDelete(null)}
+                disabled={isDeleting}
+                className="btn btn-secondary"
+                style={{ flex: 1 }}
+              >
+                Annuler
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmDeleteArea}
+                disabled={isDeleting}
+                style={{
+                  flex: 1.3,
+                  background: 'var(--danger)',
+                  color: '#FFFFFF',
+                  border: 'none',
+                  borderRadius: 'var(--radius-md)',
+                  padding: '0.6rem 0.85rem',
+                  fontSize: '0.82rem',
+                  fontWeight: 700,
+                  cursor: isDeleting ? 'not-allowed' : 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: '0.4rem',
+                  opacity: isDeleting ? 0.6 : 1,
+                }}
+              >
+                {isDeleting ? <Loader2 size={16} className="spin" /> : <Trash2 size={16} />}
+                <span>Supprimer la zone</span>
+              </button>
+            </div>
           </div>
         </div>
       )}

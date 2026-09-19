@@ -8,6 +8,7 @@ import { ArrowRightLeft, X, MapPin } from 'lucide-react';
 import { ShoeModel, Section, Area, Warehouse, TransferLog } from '../types';
 import { db } from '../db/indexedDb';
 import confetti from 'canvas-confetti';
+import { SectionSearchSelect } from './SectionSearchSelect';
 
 interface TransferModalProps {
   model: ShoeModel | null;
@@ -93,8 +94,9 @@ export const TransferModal: React.FC<TransferModalProps> = ({
       style={{
         position: 'fixed',
         inset: 0,
-        background: 'rgba(0, 0, 0, 0.8)',
-        backdropFilter: 'blur(8px)',
+        background: 'rgba(15, 23, 42, 0.45)',
+        backdropFilter: 'blur(4px)',
+        WebkitBackdropFilter: 'blur(4px)',
         zIndex: 290,
         display: 'flex',
         alignItems: 'center',
@@ -103,11 +105,15 @@ export const TransferModal: React.FC<TransferModalProps> = ({
       }}
     >
       <div
-        className="glass-panel fade-in"
+        className="card fade-in"
         style={{
           width: '100%',
           maxWidth: '460px',
-          background: 'var(--bg-surface)',
+          background: '#FFFFFF',
+          color: 'var(--text-primary)',
+          borderRadius: 'var(--radius-lg)',
+          boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.05)',
+          border: '1px solid var(--border-default)',
           padding: '1.5rem',
           position: 'relative',
         }}
@@ -155,19 +161,33 @@ export const TransferModal: React.FC<TransferModalProps> = ({
         <div
           style={{
             padding: '0.75rem',
-            background: 'rgba(9, 13, 22, 0.5)',
+            background: 'var(--bg-input)',
             borderRadius: 'var(--radius-md)',
-            border: '1px solid var(--border-subtle)',
+            border: '1px solid var(--border-default)',
             marginBottom: '1rem',
             display: 'flex',
             alignItems: 'center',
-            gap: '0.5rem',
+            gap: '0.65rem',
           }}
         >
-          <MapPin size={16} style={{ color: 'var(--primary)' }} />
+          <div
+            style={{
+              width: '28px',
+              height: '28px',
+              borderRadius: 'var(--radius-sm)',
+              background: 'var(--accent-light)',
+              color: 'var(--accent-dark)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              flexShrink: 0,
+            }}
+          >
+            <MapPin size={15} />
+          </div>
           <div>
             <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>Emplacement actuel :</div>
-            <div style={{ fontWeight: 700, fontSize: '0.88rem', color: '#fbbf24' }}>
+            <div style={{ fontWeight: 700, fontSize: '0.9rem', color: 'var(--text-primary)' }}>
               {currentSection ? currentSection.name : 'Non assigné'}
             </div>
           </div>
@@ -178,19 +198,13 @@ export const TransferModal: React.FC<TransferModalProps> = ({
             <label style={{ display: 'block', fontSize: '0.78rem', fontWeight: 700, marginBottom: '0.25rem' }}>
               Rayon de destination :
             </label>
-            <select
-              value={toSectionId}
-              required
-              onChange={(e) => setToSectionId(e.target.value)}
-              className="input-control"
-            >
-              <option value="">-- Choisir le nouveau rayon --</option>
-              {availableSections.map((s) => (
-                <option key={s.id} value={s.id}>
-                  {s.name} {s.capacity ? `(${s.capacity})` : ''}
-                </option>
-              ))}
-            </select>
+            <SectionSearchSelect
+              sections={availableSections}
+              areas={areas}
+              selectedSectionId={toSectionId}
+              onSelectSection={setToSectionId}
+              placeholder="Rechercher le nouveau rayon (ex: B1, D27)..."
+            />
           </div>
 
           <div>

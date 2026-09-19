@@ -4,6 +4,7 @@
 // ============================================================================
 
 import { ShoeModel, Section, Area, Warehouse, ModelSection } from '../types';
+import { db } from '../db/indexedDb';
 
 export interface CsvImportRow {
   reference_code: string;
@@ -19,6 +20,289 @@ export interface CsvValidationResult {
   validRows: CsvImportRow[];
   errors: Array<{ line: number; message: string }>;
 }
+
+// ----------------------------------------------------------------------------
+// V2 Database Types & Schema
+// ----------------------------------------------------------------------------
+
+export interface V2Deposit {
+  id: number;
+  name: string;
+  isBase: boolean;
+}
+
+export interface V2Section {
+  id: number;
+  name: string;
+  depositId: number;
+  normalizedName: string;
+  zoneName: string;
+}
+
+export interface V2Product {
+  id: number;
+  referenceCode: string;
+  name?: string;
+  priceOrSize?: string;
+  sectionId: number;
+}
+
+export interface V2ParsedDatabase {
+  deposits: V2Deposit[];
+  sections: V2Section[];
+  products: V2Product[];
+  errors: Array<{ line: number; message: string }>;
+  summary: {
+    totalDeposits: number;
+    baseDepositName: string;
+    totalSections: number;
+    zones: string[];
+    totalProducts: number;
+  };
+}
+
+export function detectCsvFormat(csvText: string): 'v2' | 'v3' | 'unknown' {
+  const trimmed = csvText.trim();
+  if (!trimmed) return 'unknown';
+  const lines = trimmed.split(/\r?\n/).slice(0, 10);
+
+  const hasV2Lines = lines.some((line) => {
+    const firstWord = line.split(',')[0]?.trim().toLowerCase();
+    return firstWord === 'deposit' || firstWord === 'section' || firstWord === 'product';
+  });
+
+  if (hasV2Lines) return 'v2';
+
+  const firstLine = lines[0]?.toLowerCase() || '';
+  if (firstLine.includes('reference_code')) return 'v3';
+
+  return 'unknown';
+}
+
+export function parseV2DatabaseCsv(csvText: string): V2ParsedDatabase {
+  const lines = csvText.split(/\r?\n/);
+  const deposits: V2Deposit[] = [];
+  const sections: V2Section[] = [];
+  const products: V2Product[] = [];
+  const errors: Array<{ line: number; message: string }> = [];
+
+  for (let i = 0; i < lines.length; i++) {
+    const rawLine = lines[i].trim();
+    if (!rawLine || rawLine.startsWith('#')) continue;
+
+    const parts = rawLine.split(',').map((p) => p.trim());
+    const rowType = parts[0]?.toLowerCase();
+
+    if (rowType === 'deposit') {
+      const id = parseInt(parts[1], 10);
+      const name = parts[2] || `Deposit ${id}`;
+      const isBase = parts[3]?.toLowerCase() === 'true';
+
+      if (isNaN(id)) {
+        errors.push({ line: i + 1, message: `Deposit ID missing or invalid on line ${i + 1}` });
+      } else {
+        deposits.push({ id, name, isBase });
+      }
+    } else if (rowType === 'section') {
+      const id = parseInt(parts[1], 10);
+      const rawName = parts[2] || '';
+      const depositId = parseInt(parts[3], 10);
+
+      if (isNaN(id) || !rawName) {
+        errors.push({ line: i + 1, message: `Invalid section record on line ${i + 1}` });
+      } else {
+        const cleanLetter = rawName.charAt(0).toUpperCase();
+        const remainder = rawName.slice(1);
+        const normalizedName = cleanLetter + remainder;
+        const zoneName = `Zone ${cleanLetter}`;
+
+        sections.push({
+          id,
+          name: rawName,
+          depositId: isNaN(depositId) ? 1 : depositId,
+          normalizedName,
+          zoneName,
+        });
+      }
+    } else if (rowType === 'product') {
+      const id = parseInt(parts[1], 10);
+      const referenceCode = parts[2] || '';
+      const rawName = parts[3];
+      const rawPriceOrSize = parts[4];
+      const sectionId = parseInt(parts[5], 10);
+
+      if (!referenceCode) {
+        errors.push({ line: i + 1, message: `Missing reference code on line ${i + 1}` });
+      } else if (isNaN(sectionId)) {
+        errors.push({ line: i + 1, message: `Invalid or missing section ID on line ${i + 1}` });
+      } else {
+        products.push({
+          id: isNaN(id) ? products.length + 1 : id,
+          referenceCode: referenceCode.toUpperCase(),
+          name: rawName && rawName !== 'N/A' ? rawName : undefined,
+          priceOrSize: rawPriceOrSize && rawPriceOrSize !== 'N/A' ? rawPriceOrSize : undefined,
+          sectionId,
+        });
+      }
+    }
+  }
+
+  const baseDep = deposits.find((d) => d.isBase) || deposits[0];
+  const uniqueZones = Array.from(new Set(sections.map((s) => s.zoneName))).sort();
+
+  return {
+    deposits,
+    sections,
+    products,
+    errors,
+    summary: {
+      totalDeposits: deposits.length,
+      baseDepositName: baseDep?.name || 'BASE',
+      totalSections: sections.length,
+      zones: uniqueZones,
+      totalProducts: products.length,
+    },
+  };
+}
+
+export async function importV2DatabaseToDb(
+  v2Data: V2ParsedDatabase,
+  targetWarehouseId: string,
+  existingAreas: Area[],
+  existingSections: Section[]
+): Promise<{
+  areasCreated: number;
+  sectionsCreated: number;
+  modelsCreated: number;
+  assignmentsCreated: number;
+}> {
+  const now = new Date().toISOString();
+  const areasToInsert: Area[] = [];
+  const sectionsToInsert: Section[] = [];
+  const modelsToInsert: ShoeModel[] = [];
+  const modelSectionsToInsert: ModelSection[] = [];
+
+  // 1. Resolve Areas (Zone A, Zone B, etc.)
+  const areaNameToId = new Map<string, string>();
+  for (const existingArea of existingAreas) {
+    if (existingArea.warehouse_id === targetWarehouseId && existingArea.status === 'active') {
+      areaNameToId.set(existingArea.name.toLowerCase(), existingArea.id);
+    }
+  }
+
+  for (const zoneName of v2Data.summary.zones) {
+    if (!areaNameToId.has(zoneName.toLowerCase())) {
+      const newAreaId = `area-${targetWarehouseId}-${zoneName.replace(/\s+/g, '-').toLowerCase()}-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`;
+      const newArea: Area = {
+        id: newAreaId,
+        warehouse_id: targetWarehouseId,
+        name: zoneName,
+        status: 'active',
+        created_at: now,
+        updated_at: now,
+        version: 1,
+        is_dirty: true,
+        local_sync_status: 'pending',
+      };
+      areasToInsert.push(newArea);
+      areaNameToId.set(zoneName.toLowerCase(), newAreaId);
+    }
+  }
+
+  // 2. Resolve Sections (A1..A11, b1..b30, etc.)
+  const v2SectionIdToV3SectionId = new Map<number, string>();
+  const existingSectionMap = new Map<string, string>(); // `${areaId}:${normalizedName.toLowerCase()}` -> sectionId
+
+  for (const es of existingSections) {
+    existingSectionMap.set(`${es.area_id}:${es.name.toLowerCase()}`, es.id);
+  }
+
+  for (const v2Sec of v2Data.sections) {
+    const areaId = areaNameToId.get(v2Sec.zoneName.toLowerCase())!;
+    const key = `${areaId}:${v2Sec.normalizedName.toLowerCase()}`;
+
+    if (existingSectionMap.has(key)) {
+      v2SectionIdToV3SectionId.set(v2Sec.id, existingSectionMap.get(key)!);
+    } else {
+      const sectionId = `sec-v2-${v2Sec.id}-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`;
+      const newSection: Section = {
+        id: sectionId,
+        area_id: areaId,
+        name: v2Sec.normalizedName,
+        capacity: null,
+        status: 'active',
+        created_at: now,
+        updated_at: now,
+        version: 1,
+        is_dirty: true,
+        local_sync_status: 'pending',
+      };
+      sectionsToInsert.push(newSection);
+      existingSectionMap.set(key, sectionId);
+      v2SectionIdToV3SectionId.set(v2Sec.id, sectionId);
+    }
+  }
+
+  // 3. Create Models and ModelSection assignments
+  for (const v2Prod of v2Data.products) {
+    const modelId = `model-v2-${v2Prod.id}-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
+    const model: ShoeModel = {
+      id: modelId,
+      warehouse_id: targetWarehouseId,
+      reference_code: v2Prod.referenceCode,
+      name: v2Prod.name || null,
+      size_range: v2Prod.priceOrSize || null,
+      price: null,
+      photo_url: null,
+      status: 'active',
+      created_at: now,
+      updated_at: now,
+      version: 1,
+      is_dirty: true,
+      local_sync_status: 'pending',
+    };
+    modelsToInsert.push(model);
+
+    const v3SectionId = v2SectionIdToV3SectionId.get(v2Prod.sectionId);
+    if (v3SectionId) {
+      const assignment: ModelSection = {
+        id: `ms-v2-${v2Prod.id}-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
+        model_id: modelId,
+        section_id: v3SectionId,
+        assigned_at: now,
+        updated_at: now,
+        version: 1,
+        is_dirty: true,
+        local_sync_status: 'pending',
+      };
+      modelSectionsToInsert.push(assignment);
+    }
+  }
+
+  // 4. Ultra-fast bulk IndexedDB insertion
+  if (areasToInsert.length > 0) {
+    await db.bulkPut('areas', areasToInsert);
+  }
+  if (sectionsToInsert.length > 0) {
+    await db.bulkPut('sections', sectionsToInsert);
+  }
+  if (modelsToInsert.length > 0) {
+    await db.bulkPut('models', modelsToInsert);
+  }
+  if (modelSectionsToInsert.length > 0) {
+    await db.bulkPut('model_sections', modelSectionsToInsert);
+  }
+
+  db.notify();
+
+  return {
+    areasCreated: areasToInsert.length,
+    sectionsCreated: sectionsToInsert.length,
+    modelsCreated: modelsToInsert.length,
+    assignmentsCreated: modelSectionsToInsert.length,
+  };
+}
+
 
 export function getCsvTemplate(): string {
   return [
@@ -93,6 +377,72 @@ export function parseCsvText(csvText: string): CsvValidationResult {
 
   return { validRows, errors };
 }
+
+export async function importStandardCsvToDb(
+  validRows: CsvImportRow[],
+  targetWarehouseId: string,
+  existingSections: Section[]
+): Promise<{ modelsCreated: number; assignmentsCreated: number }> {
+  const now = new Date().toISOString();
+  const modelsToInsert: ShoeModel[] = [];
+  const modelSectionsToInsert: ModelSection[] = [];
+
+  const sectionNameMap = new Map<string, string>();
+  for (const s of existingSections) {
+    sectionNameMap.set(s.name.toLowerCase(), s.id);
+  }
+
+  for (const row of validRows) {
+    const modelId = `model-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
+    const model: ShoeModel = {
+      id: modelId,
+      warehouse_id: targetWarehouseId,
+      reference_code: row.reference_code,
+      name: row.name || null,
+      size_range: row.size_range || null,
+      price: row.price || null,
+      photo_url: row.photo_url || null,
+      status: 'active',
+      created_at: now,
+      updated_at: now,
+      version: 1,
+      is_dirty: true,
+      local_sync_status: 'pending',
+    };
+    modelsToInsert.push(model);
+
+    if (row.section_name) {
+      const secId = sectionNameMap.get(row.section_name.toLowerCase());
+      if (secId) {
+        modelSectionsToInsert.push({
+          id: `ms-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
+          model_id: modelId,
+          section_id: secId,
+          assigned_at: now,
+          updated_at: now,
+          version: 1,
+          is_dirty: true,
+          local_sync_status: 'pending',
+        });
+      }
+    }
+  }
+
+  if (modelsToInsert.length > 0) {
+    await db.bulkPut('models', modelsToInsert);
+  }
+  if (modelSectionsToInsert.length > 0) {
+    await db.bulkPut('model_sections', modelSectionsToInsert);
+  }
+
+  db.notify();
+
+  return {
+    modelsCreated: modelsToInsert.length,
+    assignmentsCreated: modelSectionsToInsert.length,
+  };
+}
+
 
 export function exportCatalogToCsv(
   models: ShoeModel[],

@@ -12,12 +12,9 @@ import {
   RefreshCw,
   AlertTriangle,
   Database,
-  Sparkles,
   ChevronDown,
-  Check,
 } from 'lucide-react';
 import { syncEngine, SyncEngineStatus } from '../lib/syncEngine';
-import { seedDemoData } from '../db/seedData';
 import { Warehouse } from '../types';
 
 interface HeaderProps {
@@ -25,14 +22,13 @@ interface HeaderProps {
   warehouses: Warehouse[];
   onOpenWarehouseModal: () => void;
   onOpenSyncTab: () => void;
-  onRefreshData: () => void;
+  onRefreshData?: () => void;
 }
 
 export const Header: React.FC<HeaderProps> = ({
   activeWarehouse,
   onOpenWarehouseModal,
   onOpenSyncTab,
-  onRefreshData,
 }) => {
   const [syncStatus, setSyncStatus] = useState<SyncEngineStatus>({
     isOnline: true,
@@ -42,8 +38,6 @@ export const Header: React.FC<HeaderProps> = ({
     conflictCount: 0,
     mode: 'simulator',
   });
-  const [isSeeding, setIsSeeding] = useState(false);
-  const [seedSuccess, setSeedSuccess] = useState(false);
 
   useEffect(() => {
     return syncEngine.subscribe(setSyncStatus);
@@ -51,22 +45,6 @@ export const Header: React.FC<HeaderProps> = ({
 
   const handleToggleOffline = () => {
     syncEngine.setSimulatedOffline(syncStatus.isOnline);
-  };
-
-  const handleSeedData = async () => {
-    setIsSeeding(true);
-    setSeedSuccess(false);
-    try {
-      await seedDemoData();
-      await onRefreshData();
-      setSeedSuccess(true);
-      setTimeout(() => setSeedSuccess(false), 2500);
-    } catch (err: any) {
-      console.error('Erreur chargement données démo:', err);
-      alert('Erreur lors du chargement des données de démo: ' + (err?.message || String(err)));
-    } finally {
-      setIsSeeding(false);
-    }
   };
 
   return (
@@ -199,33 +177,6 @@ export const Header: React.FC<HeaderProps> = ({
               ? `${syncStatus.pendingChangesCount} en attente`
               : 'Synchronisé'}
           </span>
-        </button>
-
-        {/* Demo Seed Button */}
-        <button
-          type="button"
-          onClick={handleSeedData}
-          disabled={isSeeding}
-          style={{
-            display: 'inline-flex',
-            alignItems: 'center',
-            gap: '0.3rem',
-            padding: '0.35rem 0.7rem',
-            fontSize: '0.75rem',
-            fontWeight: 600,
-            fontFamily: 'var(--font-sans)',
-            background: seedSuccess ? 'var(--success-light)' : 'var(--bg-input)',
-            color: seedSuccess ? 'var(--success)' : 'var(--text-secondary)',
-            border: 'none',
-            borderRadius: 'var(--radius-full)',
-            cursor: isSeeding ? 'not-allowed' : 'pointer',
-            opacity: isSeeding ? 0.6 : 1,
-            transition: 'all 0.15s ease',
-          }}
-          title="Charger les données d'exemple"
-        >
-          {seedSuccess ? <Check size={13} /> : <Sparkles size={13} style={{ color: 'var(--accent)' }} />}
-          <span>{isSeeding ? '...' : seedSuccess ? 'Chargé !' : 'Démo'}</span>
         </button>
       </div>
     </header>

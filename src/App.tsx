@@ -9,22 +9,23 @@ import {
   ArrowRightLeft,
   Layers,
   Database,
-  BarChart3,
+  Plus,
   QrCode,
   ScanBarcode,
 } from 'lucide-react';
+import { App as CapApp } from '@capacitor/app';
 import { Header } from './components/Header';
 import { SearchTab } from './components/SearchTab';
 import { TransfersTab } from './components/TransfersTab';
 import { CatalogTab } from './components/CatalogTab';
 import { SyncTab } from './components/SyncTab';
-import { AnalyticsTab } from './components/AnalyticsTab';
 
 import { WarehouseSelectorModal } from './components/WarehouseSelectorModal';
 import { BarcodeScannerModal } from './components/BarcodeScannerModal';
 import { TransferModal } from './components/TransferModal';
 import { ModelDetailModal } from './components/ModelDetailModal';
 import { DevicePairingModal } from './components/DevicePairingModal';
+import { QuickAddModelBottomSheet } from './components/QuickAddModelBottomSheet';
 
 import { db } from './db/indexedDb';
 import { seedDemoData } from './db/seedData';
@@ -40,10 +41,13 @@ import {
   DisambiguatedModelResult,
 } from './types';
 
-type ActiveTab = 'search' | 'transfers' | 'catalog' | 'sync' | 'analytics';
+type ActiveTab = 'search' | 'transfers' | 'catalog' | 'sync';
 
 export function App() {
   const [activeTab, setActiveTab] = useState<ActiveTab>('search');
+  const [isQuickAddOpen, setIsQuickAddOpen] = useState(false);
+  const [scannerTargetCallback, setScannerTargetCallback] = useState<((code: string) => void) | null>(null);
+  const [quickAddInitialRef, setQuickAddInitialRef] = useState('');
 
   // Database state
   const [warehouses, setWarehouses] = useState<Warehouse[]>([]);
@@ -103,6 +107,17 @@ export function App() {
       return;
     }
 
+    // Ensure Algerian localization for warehouses
+    for (const wh of w) {
+      if (wh.name.includes('Casablanca')) {
+        wh.name = wh.name.replace('Casablanca - Aïn Sebaâ', 'Alger - Oued Smar').replace('Casablanca', 'Alger');
+        db.putRaw('warehouses', wh, false);
+      } else if (wh.name.includes('Tanger')) {
+        wh.name = wh.name.replace('Tanger Med Logistique', 'Oran - Es Sénia').replace('Tanger', 'Oran');
+        db.putRaw('warehouses', wh, false);
+      }
+    }
+
     setWarehouses(w);
     setAreas(a);
     setSections(s);
@@ -140,10 +155,79 @@ export function App() {
   };
 
   const handleBarcodeScanned = (code: string) => {
-    // When a barcode is scanned, switch to search tab and pre-fill query
-    setSearchQuery(code);
-    setActiveTab('search');
+    if (scannerTargetCallback) {
+      scannerTargetCallback(code);
+      setScannerTargetCallback(null);
+    } else {
+      setSearchQuery(code);
+      setActiveTab('search');
+    }
   };
+
+  // Intercept Android hardware Back Button to gracefully close modals and navigate without white-screening
+  useEffect(() => {
+    let listenerPromise: any = null;
+    try {
+      listenerPromise = CapApp.addListener('backButton', ({ canGoBack }) => {
+        // 0. If Quick Add bottomsheet is open, close it
+        if (isQuickAddOpen) {
+          setIsQuickAddOpen(false);
+          return;
+        }
+        // 1. If Barcode Scanner modal is open, close it cleanly!
+        if (isBarcodeModalOpen) {
+          setIsBarcodeModalOpen(false);
+          return;
+        }
+        // 2. If Warehouse modal is open, close it
+        if (isWarehouseModalOpen) {
+          setIsWarehouseModalOpen(false);
+          return;
+        }
+        // 3. If Pairing modal is open, close it
+        if (isPairingModalOpen) {
+          setIsPairingModalOpen(false);
+          return;
+        }
+        // 4. If Transfer modal is open, close it
+        if (transferTargetModel) {
+          setTransferTargetModel(null);
+          return;
+        }
+        // 5. If Detail modal is open, close it
+        if (detailModalItem) {
+          setDetailModalItem(null);
+          return;
+        }
+        // 6. If on any tab other than search, switch to search
+        if (activeTab !== 'search') {
+          setActiveTab('search');
+          return;
+        }
+        // 7. If on main search with no modals, minimize/exit
+        if (canGoBack) {
+          window.history.back();
+        } else {
+          CapApp.exitApp();
+        }
+      });
+    } catch (e) {
+      console.warn('CapApp backButton listener setup ignored (web mode):', e);
+    }
+
+    return () => {
+      if (listenerPromise) {
+        listenerPromise.then((handle: any) => handle?.remove?.()).catch(() => {});
+      }
+    };
+  }, [
+    isBarcodeModalOpen,
+    isWarehouseModalOpen,
+    isPairingModalOpen,
+    transferTargetModel,
+    detailModalItem,
+    activeTab,
+  ]);
 
   return (
     <div className="app-container">
@@ -196,6 +280,14 @@ export function App() {
             modelSections={modelSections}
             activeWarehouse={activeWarehouse}
             onRefreshData={refreshData}
+            onOpenQuickAdd={() => {
+              setQuickAddInitialRef('');
+              setIsQuickAddOpen(true);
+            }}
+            onNavigateToSearch={(q) => {
+              setActiveTab('search');
+              if (q) setSearchQuery(q);
+            }}
           />
         )}
 
@@ -205,21 +297,9 @@ export function App() {
             onRefreshData={refreshData}
           />
         )}
-
-        {activeTab === 'analytics' && (
-          <AnalyticsTab
-            searchLogs={searchLogs}
-            transfers={transfers}
-            auditLogs={auditLogs}
-            models={models}
-            sections={sections}
-            areas={areas}
-            activeWarehouse={activeWarehouse}
-          />
-        )}
       </main>
 
-      {/* Floor-Friendly Mobile Bottom Navigation Bar (FR Usability) */}
+      {/* Floor-Friendly Mobile Bottom Navigation Bar with Center Quick Add Button */}
       <nav className="bottom-nav">
         <button
           type="button"
@@ -239,6 +319,55 @@ export function App() {
           <span>Transférer</span>
         </button>
 
+        {/* Center Prominent Quick Add Model Button */}
+        <button
+          type="button"
+          onClick={() => {
+            setQuickAddInitialRef('');
+            setIsQuickAddOpen(true);
+          }}
+          className="nav-item"
+          style={{
+            position: 'relative',
+            top: '-8px',
+            background: 'transparent',
+            border: 'none',
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            cursor: 'pointer',
+            padding: '0',
+          }}
+          title="Ajouter rapidement un modèle"
+        >
+          <div
+            style={{
+              width: '46px',
+              height: '46px',
+              borderRadius: '50%',
+              background: 'linear-gradient(135deg, #F59E0B 0%, #D97706 100%)',
+              color: '#FFFFFF',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              boxShadow: '0 4px 12px rgba(217, 119, 6, 0.4), 0 2px 4px rgba(0, 0, 0, 0.1)',
+              transition: 'transform 0.15s ease',
+            }}
+          >
+            <Plus size={24} strokeWidth={2.6} />
+          </div>
+          <span
+            style={{
+              fontSize: '0.65rem',
+              fontWeight: 700,
+              color: 'var(--accent)',
+              marginTop: '2px',
+            }}
+          >
+            Ajouter
+          </span>
+        </button>
+
         <button
           type="button"
           onClick={() => setActiveTab('catalog')}
@@ -255,15 +384,6 @@ export function App() {
         >
           <Database size={20} />
           <span>Synchro</span>
-        </button>
-
-        <button
-          type="button"
-          onClick={() => setActiveTab('analytics')}
-          className={`nav-item ${activeTab === 'analytics' ? 'active' : ''}`}
-        >
-          <BarChart3 size={20} />
-          <span>Audit & Gaps</span>
         </button>
       </nav>
 
@@ -304,6 +424,28 @@ export function App() {
         isOpen={isPairingModalOpen}
         onSuccess={refreshData}
         onClose={() => setIsPairingModalOpen(false)}
+      />
+
+      {/* Quick Add Model BottomSheet */}
+      <QuickAddModelBottomSheet
+        isOpen={isQuickAddOpen}
+        onClose={() => {
+          setIsQuickAddOpen(false);
+          setScannerTargetCallback(null);
+        }}
+        sections={sections}
+        areas={areas}
+        activeWarehouse={activeWarehouse}
+        existingModels={models}
+        initialReference={quickAddInitialRef}
+        onSuccess={refreshData}
+        onOpenScanner={() => {
+          setScannerTargetCallback(() => (scannedCode: string) => {
+            setQuickAddInitialRef(scannedCode);
+            setIsQuickAddOpen(true);
+          });
+          setIsBarcodeModalOpen(true);
+        }}
       />
     </div>
   );

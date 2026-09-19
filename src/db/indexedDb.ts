@@ -272,6 +272,122 @@ export class LocalDatabase {
     });
   }
 
+  async bulkDelete(storeName: string, ids: string[]): Promise<void> {
+    await this.init();
+    if (!this.db || ids.length === 0) return;
+
+    return new Promise((resolve, reject) => {
+      try {
+        const tx = this.db!.transaction(storeName, 'readwrite');
+        const store = tx.objectStore(storeName);
+
+        for (const id of ids) {
+          store.delete(id);
+        }
+
+        tx.oncomplete = () => {
+          this.notify();
+          resolve();
+        };
+        tx.onerror = () => reject(tx.error);
+        tx.onabort = () => reject(tx.error);
+      } catch (err) {
+        reject(err);
+      }
+    });
+  }
+
+  // Cascade delete section and all its models
+  async deleteSectionWithCascade(sectionId: string): Promise<{ deletedModelsCount: number }> {
+    await this.init();
+    if (!this.db) return { deletedModelsCount: 0 };
+
+    const allAssignments = await this.getAll<ModelSection>('model_sections');
+    const matchingAssignments = allAssignments.filter((ms) => ms.section_id === sectionId);
+    const modelIds = Array.from(new Set(matchingAssignments.map((ms) => ms.model_id)));
+    const assignmentIds = matchingAssignments.map((ms) => ms.id);
+
+    return new Promise((resolve, reject) => {
+      try {
+        const tx = this.db!.transaction(['models', 'model_sections', 'sections'], 'readwrite');
+        const modelStore = tx.objectStore('models');
+        const msStore = tx.objectStore('model_sections');
+        const sectionStore = tx.objectStore('sections');
+
+        for (const mId of modelIds) {
+          modelStore.delete(mId);
+        }
+
+        for (const msId of assignmentIds) {
+          msStore.delete(msId);
+        }
+
+        sectionStore.delete(sectionId);
+
+        tx.oncomplete = () => {
+          this.notify();
+          resolve({ deletedModelsCount: modelIds.length });
+        };
+        tx.onerror = () => reject(tx.error);
+        tx.onabort = () => reject(tx.error);
+      } catch (err) {
+        reject(err);
+      }
+    });
+  }
+
+  // Cascade delete area, its sections, and all their models
+  async deleteAreaWithCascade(areaId: string): Promise<{ deletedSectionsCount: number; deletedModelsCount: number }> {
+    await this.init();
+    if (!this.db) return { deletedSectionsCount: 0, deletedModelsCount: 0 };
+
+    const allSections = await this.getAll<Section>('sections');
+    const areaSections = allSections.filter((s) => s.area_id === areaId);
+    const sectionIds = areaSections.map((s) => s.id);
+    const sectionIdSet = new Set(sectionIds);
+
+    const allAssignments = await this.getAll<ModelSection>('model_sections');
+    const matchingAssignments = allAssignments.filter((ms) => sectionIdSet.has(ms.section_id));
+    const modelIds = Array.from(new Set(matchingAssignments.map((ms) => ms.model_id)));
+    const assignmentIds = matchingAssignments.map((ms) => ms.id);
+
+    return new Promise((resolve, reject) => {
+      try {
+        const tx = this.db!.transaction(['models', 'model_sections', 'sections', 'areas'], 'readwrite');
+        const modelStore = tx.objectStore('models');
+        const msStore = tx.objectStore('model_sections');
+        const sectionStore = tx.objectStore('sections');
+        const areaStore = tx.objectStore('areas');
+
+        for (const mId of modelIds) {
+          modelStore.delete(mId);
+        }
+
+        for (const msId of assignmentIds) {
+          msStore.delete(msId);
+        }
+
+        for (const sId of sectionIds) {
+          sectionStore.delete(sId);
+        }
+
+        areaStore.delete(areaId);
+
+        tx.oncomplete = () => {
+          this.notify();
+          resolve({
+            deletedSectionsCount: sectionIds.length,
+            deletedModelsCount: modelIds.length,
+          });
+        };
+        tx.onerror = () => reject(tx.error);
+        tx.onabort = () => reject(tx.error);
+      } catch (err) {
+        reject(err);
+      }
+    });
+  }
+
   // Find all dirty records awaiting sync push
   async getDirtyRecords(): Promise<{
     warehouses: Warehouse[];

@@ -19,7 +19,7 @@ import {
 export const SAMPLE_WAREHOUSES: Warehouse[] = [
   {
     id: 'wh-casablanca-01',
-    name: 'Dépôt Central (Casablanca - Aïn Sebaâ)',
+    name: 'Dépôt Central (Alger - Oued Smar)',
     status: 'active',
     created_at: new Date(Date.now() - 30 * 86400000).toISOString(),
     updated_at: new Date().toISOString(),
@@ -29,7 +29,7 @@ export const SAMPLE_WAREHOUSES: Warehouse[] = [
   },
   {
     id: 'wh-tanger-02',
-    name: 'Annexe Nord (Tanger Med Logistique)',
+    name: 'Annexe Ouest (Oran - Es Sénia)',
     status: 'active',
     created_at: new Date(Date.now() - 20 * 86400000).toISOString(),
     updated_at: new Date().toISOString(),

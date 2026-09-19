@@ -110,8 +110,9 @@ export const DevicePairingModal: React.FC<DevicePairingModalProps> = ({
       style={{
         position: 'fixed',
         inset: 0,
-        background: 'rgba(0, 0, 0, 0.85)',
-        backdropFilter: 'blur(8px)',
+        background: 'rgba(15, 23, 42, 0.45)',
+        backdropFilter: 'blur(4px)',
+        WebkitBackdropFilter: 'blur(4px)',
         zIndex: 320,
         display: 'flex',
         alignItems: 'center',
@@ -120,13 +121,17 @@ export const DevicePairingModal: React.FC<DevicePairingModalProps> = ({
       }}
     >
       <div
-        className="glass-panel fade-in"
+        className="card fade-in"
         style={{
           width: '100%',
           maxWidth: '500px',
           maxHeight: '90vh',
           overflowY: 'auto',
-          background: 'var(--bg-surface)',
+          background: '#FFFFFF',
+          color: 'var(--text-primary)',
+          borderRadius: 'var(--radius-lg)',
+          boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.05)',
+          border: '1px solid var(--border-default)',
           padding: '1.5rem',
           position: 'relative',
         }}

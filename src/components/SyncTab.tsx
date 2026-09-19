@@ -237,7 +237,7 @@ export const SyncTab: React.FC<SyncTabProps> = ({
                       Version de cet appareil
                     </div>
                     <div>Nom : {c.payload.name || 'N/A'}</div>
-                    <div>Prix : {c.payload.price ? `${c.payload.price} DH` : 'N/A'}</div>
+                    <div>Prix : {c.payload.price ? `${c.payload.price} DA` : 'N/A'}</div>
                     <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', marginTop: '0.35rem' }}>
                       Modifié hors-ligne
                     </div>
