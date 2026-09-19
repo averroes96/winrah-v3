@@ -72,6 +72,9 @@ export function App() {
   // Model detail modal state
   const [detailModalItem, setDetailModalItem] = useState<DisambiguatedModelResult | null>(null);
 
+  // Search query state
+  const [searchQuery, setSearchQuery] = useState('');
+
   const isSeedingRef = React.useRef(false);
 
   // Load all local data from IndexedDB
@@ -137,15 +140,9 @@ export function App() {
   };
 
   const handleBarcodeScanned = (code: string) => {
-    // When a barcode is scanned, switch to search tab and pre-fill or focus
+    // When a barcode is scanned, switch to search tab and pre-fill query
+    setSearchQuery(code);
     setActiveTab('search');
-    // Dispatch custom event or store query
-    const input = document.querySelector('input.ref-code') as HTMLInputElement;
-    if (input) {
-      input.value = code;
-      input.dispatchEvent(new Event('input', { bubbles: true }));
-      input.focus();
-    }
   };
 
   return (
@@ -172,6 +169,8 @@ export function App() {
             onOpenBarcodeScanner={() => setIsBarcodeModalOpen(true)}
             onInitiateTransfer={handleStartTransfer}
             onViewModelDetails={(item) => setDetailModalItem(item)}
+            query={searchQuery}
+            onQueryChange={setSearchQuery}
           />
         )}
 

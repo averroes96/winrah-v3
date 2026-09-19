@@ -10,11 +10,9 @@ import {
   ScanBarcode,
   Globe,
   MapPin,
-  Tag,
   ArrowRightLeft,
   X,
   Layers,
-  Sparkles,
   AlertCircle,
 } from 'lucide-react';
 import {
@@ -38,6 +36,8 @@ interface SearchTabProps {
   onOpenBarcodeScanner: () => void;
   onInitiateTransfer: (model: ShoeModel, fromSectionId?: string) => void;
   onViewModelDetails: (disambiguated: DisambiguatedModelResult) => void;
+  query?: string;
+  onQueryChange?: (query: string) => void;
 }
 
 export const SearchTab: React.FC<SearchTabProps> = ({
@@ -50,16 +50,31 @@ export const SearchTab: React.FC<SearchTabProps> = ({
   onOpenBarcodeScanner,
   onInitiateTransfer,
   onViewModelDetails,
+  query: externalQuery,
+  onQueryChange,
 }) => {
-  const [query, setQuery] = useState('');
+  const [internalQuery, setInternalQuery] = useState('');
+  const query = externalQuery !== undefined ? externalQuery : internalQuery;
+  const setQuery = (q: string) => {
+    if (onQueryChange) {
+      onQueryChange(q);
+    } else {
+      setInternalQuery(q);
+    }
+  };
+
   const [isSearchEverywhere, setIsSearchEverywhere] = useState(false);
   const [selectedAreaId, setSelectedAreaId] = useState<string>('all');
   const lastLoggedQueryRef = useRef<string>('');
 
-  // Disambiguate all models
+  // Only load/show models when user starts typing
+  const isTyping = query.trim().length > 0;
+
+  // Disambiguate models only when query is present to avoid loading models immediately
   const disambiguatedList = useMemo(() => {
+    if (!isTyping) return [];
     return disambiguateModels(models, modelSections, sections, areas, warehouses);
-  }, [models, modelSections, sections, areas, warehouses]);
+  }, [models, modelSections, sections, areas, warehouses, isTyping]);
 
   // Available areas for filter chips
   const relevantAreas = useMemo(() => {
@@ -69,8 +84,9 @@ export const SearchTab: React.FC<SearchTabProps> = ({
     return areas.filter((a) => a.warehouse_id === activeWarehouse.id);
   }, [areas, isSearchEverywhere, activeWarehouse]);
 
-  // Filtered results
+  // Filtered results: only computed once the user starts typing
   const searchResults = useMemo(() => {
+    if (!isTyping) return [];
     const q = query.trim().toUpperCase();
 
     return disambiguatedList.filter((item) => {
@@ -86,8 +102,6 @@ export const SearchTab: React.FC<SearchTabProps> = ({
       }
 
       // 3. Search Query Match (Reference Code, Name, or Section Name)
-      if (!q) return true;
-
       const refMatch = item.model.reference_code.toUpperCase().includes(q);
       const nameMatch = item.model.name?.toUpperCase().includes(q) || false;
       const sectionMatch = item.sections.some((s) =>
@@ -96,7 +110,7 @@ export const SearchTab: React.FC<SearchTabProps> = ({
 
       return refMatch || nameMatch || sectionMatch;
     });
-  }, [disambiguatedList, query, isSearchEverywhere, activeWarehouse, selectedAreaId]);
+  }, [disambiguatedList, query, isSearchEverywhere, activeWarehouse, selectedAreaId, isTyping]);
 
   // Log search query for analytics & zero-result detection (FR-8.2, FR-8.3)
   useEffect(() => {
@@ -123,25 +137,25 @@ export const SearchTab: React.FC<SearchTabProps> = ({
     <div className="fade-in">
       {/* Search Input Box */}
       <div
-        className="glass-panel"
         style={{
-          padding: '0.65rem 0.9rem',
           display: 'flex',
           alignItems: 'center',
-          gap: '0.75rem',
+          gap: '0.6rem',
           marginBottom: '0.85rem',
-          background: 'rgba(16, 22, 38, 0.95)',
-          border: '1px solid var(--border-focus)',
-          boxShadow: '0 4px 20px rgba(0, 0, 0, 0.4)',
+          background: 'var(--bg-input)',
+          border: '1px solid var(--border-default)',
+          borderRadius: 'var(--radius-md)',
+          padding: '0.5rem 0.75rem',
+          transition: 'border-color 0.15s ease, box-shadow 0.15s ease',
         }}
       >
-        <Search size={22} style={{ color: 'var(--primary)', flexShrink: 0 }} />
+        <Search size={20} style={{ color: 'var(--text-muted)', flexShrink: 0 }} />
 
         <input
           type="text"
           value={query}
           onChange={(e) => setQuery(e.target.value)}
-          placeholder="Entrer référence (ex: HS-21), nom, rayon..."
+          placeholder="Chercher par référence (ex: HS-21)"
           className="ref-code"
           style={{
             flex: 1,
@@ -149,7 +163,8 @@ export const SearchTab: React.FC<SearchTabProps> = ({
             border: 'none',
             outline: 'none',
             color: 'var(--text-primary)',
-            fontSize: '1.1rem',
+            fontSize: '0.9375rem',
+            fontFamily: 'var(--font-sans)',
           }}
         />
 
@@ -163,9 +178,11 @@ export const SearchTab: React.FC<SearchTabProps> = ({
               color: 'var(--text-muted)',
               cursor: 'pointer',
               padding: '4px',
+              display: 'flex',
+              alignItems: 'center',
             }}
           >
-            <X size={18} />
+            <X size={16} />
           </button>
         )}
 
@@ -173,17 +190,23 @@ export const SearchTab: React.FC<SearchTabProps> = ({
         <button
           type="button"
           onClick={onOpenBarcodeScanner}
-          className="btn btn-primary"
           style={{
-            padding: '0.55rem 0.95rem',
-            gap: '0.4rem',
-            fontSize: '0.85rem',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            width: '40px',
+            height: '40px',
+            borderRadius: 'var(--radius-sm)',
+            background: 'var(--accent)',
+            color: '#FFFFFF',
+            border: 'none',
+            cursor: 'pointer',
             flexShrink: 0,
+            transition: 'background 0.15s ease',
           }}
-          title="Scanner un code-barres avec la caméra"
+          title="Scanner un code-barres"
         >
           <ScanBarcode size={18} />
-          <span>Scanner</span>
         </button>
       </div>
 
@@ -194,51 +217,63 @@ export const SearchTab: React.FC<SearchTabProps> = ({
           alignItems: 'center',
           justifyContent: 'space-between',
           flexWrap: 'wrap',
-          gap: '0.65rem',
-          marginBottom: '1.25rem',
+          gap: '0.5rem',
+          marginBottom: '1rem',
         }}
       >
         {/* Scope Toggle: Active Warehouse vs Everywhere (FR-5.7) */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
           <button
             type="button"
             onClick={() => setIsSearchEverywhere(false)}
-            className="btn"
             style={{
-              padding: '0.35rem 0.75rem',
-              fontSize: '0.78rem',
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '0.3rem',
+              padding: '0.3rem 0.65rem',
+              fontSize: '0.75rem',
+              fontWeight: 600,
               borderRadius: 'var(--radius-full)',
-              background: !isSearchEverywhere ? 'rgba(245, 158, 11, 0.2)' : 'rgba(255, 255, 255, 0.05)',
-              color: !isSearchEverywhere ? '#fbbf24' : 'var(--text-muted)',
-              border: `1px solid ${!isSearchEverywhere ? 'var(--primary)' : 'var(--border-subtle)'}`,
+              background: !isSearchEverywhere ? 'var(--accent-light)' : 'var(--bg-card)',
+              color: !isSearchEverywhere ? 'var(--accent-dark)' : 'var(--text-muted)',
+              border: `1px solid ${!isSearchEverywhere ? 'var(--accent)' : 'var(--border-default)'}`,
+              cursor: 'pointer',
+              fontFamily: 'var(--font-sans)',
+              transition: 'all 0.15s ease',
             }}
           >
-            <MapPin size={13} />
+            <MapPin size={12} />
             <span>{activeWarehouse ? activeWarehouse.name.split(' ')[0] : 'Entrepôt actif'}</span>
           </button>
 
           <button
             type="button"
             onClick={() => setIsSearchEverywhere(true)}
-            className="btn"
             style={{
-              padding: '0.35rem 0.75rem',
-              fontSize: '0.78rem',
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '0.3rem',
+              padding: '0.3rem 0.65rem',
+              fontSize: '0.75rem',
+              fontWeight: 600,
               borderRadius: 'var(--radius-full)',
-              background: isSearchEverywhere ? 'rgba(99, 102, 241, 0.25)' : 'rgba(255, 255, 255, 0.05)',
-              color: isSearchEverywhere ? '#818cf8' : 'var(--text-muted)',
-              border: `1px solid ${isSearchEverywhere ? 'var(--indigo)' : 'var(--border-subtle)'}`,
+              background: isSearchEverywhere ? 'var(--info-light)' : 'var(--bg-card)',
+              color: isSearchEverywhere ? 'var(--info)' : 'var(--text-muted)',
+              border: `1px solid ${isSearchEverywhere ? 'var(--info)' : 'var(--border-default)'}`,
+              cursor: 'pointer',
+              fontFamily: 'var(--font-sans)',
+              transition: 'all 0.15s ease',
             }}
-            title="Rechercher dans tous les entrepôts du réseau"
+            title="Rechercher dans tous les entrepôts"
           >
-            <Globe size={13} />
+            <Globe size={12} />
             <span>Partout ({warehouses.length})</span>
           </button>
         </div>
 
         {/* Result Counter */}
         <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
-          {searchResults.length} modèle(s) trouvé(s)
+          {isTyping ? `${searchResults.length} modèle(s)` : 'En attente de saisie'}
         </span>
       </div>
 
@@ -247,7 +282,7 @@ export const SearchTab: React.FC<SearchTabProps> = ({
         <div
           style={{
             display: 'flex',
-            gap: '0.4rem',
+            gap: '0.35rem',
             overflowX: 'auto',
             paddingBottom: '0.5rem',
             marginBottom: '1rem',
@@ -260,15 +295,17 @@ export const SearchTab: React.FC<SearchTabProps> = ({
               padding: '0.3rem 0.7rem',
               borderRadius: 'var(--radius-full)',
               fontSize: '0.75rem',
-              fontWeight: 700,
-              background: selectedAreaId === 'all' ? 'var(--text-primary)' : 'rgba(255,255,255,0.06)',
-              color: selectedAreaId === 'all' ? 'var(--bg-dark)' : 'var(--text-secondary)',
-              border: 'none',
+              fontWeight: 600,
+              background: selectedAreaId === 'all' ? 'var(--text-primary)' : 'var(--bg-card)',
+              color: selectedAreaId === 'all' ? '#FFFFFF' : 'var(--text-secondary)',
+              border: `1px solid ${selectedAreaId === 'all' ? 'var(--text-primary)' : 'var(--border-default)'}`,
               cursor: 'pointer',
               whiteSpace: 'nowrap',
+              fontFamily: 'var(--font-sans)',
+              transition: 'all 0.15s ease',
             }}
           >
-            Toutes les zones
+            Toutes zones
           </button>
           {relevantAreas.map((a) => (
             <button
@@ -279,12 +316,14 @@ export const SearchTab: React.FC<SearchTabProps> = ({
                 padding: '0.3rem 0.7rem',
                 borderRadius: 'var(--radius-full)',
                 fontSize: '0.75rem',
-                fontWeight: 700,
-                background: selectedAreaId === a.id ? 'var(--primary)' : 'rgba(255,255,255,0.06)',
-                color: selectedAreaId === a.id ? 'var(--primary-text)' : 'var(--text-secondary)',
-                border: 'none',
+                fontWeight: 600,
+                background: selectedAreaId === a.id ? 'var(--accent)' : 'var(--bg-card)',
+                color: selectedAreaId === a.id ? '#FFFFFF' : 'var(--text-secondary)',
+                border: `1px solid ${selectedAreaId === a.id ? 'var(--accent)' : 'var(--border-default)'}`,
                 cursor: 'pointer',
                 whiteSpace: 'nowrap',
+                fontFamily: 'var(--font-sans)',
+                transition: 'all 0.15s ease',
               }}
             >
               {a.name}
@@ -293,214 +332,284 @@ export const SearchTab: React.FC<SearchTabProps> = ({
         </div>
       )}
 
-      {/* Results List */}
-      <div style={{ display: 'flex', flexDirection: 'column', gap: '0.85rem' }}>
-        {searchResults.map((item) => {
-          const displayTitle = getModelDisplayReference(
-            item.model.reference_code,
-            item.displayIndex,
-            item.totalEntriesWithCode
-          );
-
-          return (
-            <div
-              key={item.model.id}
-              className="glass-panel"
-              style={{
-                padding: '1.1rem',
-                display: 'flex',
-                gap: '1rem',
-                alignItems: 'flex-start',
-                flexWrap: 'wrap',
-              }}
-            >
-              {/* Photo Thumbnail */}
-              {item.model.photo_url ? (
-                <img
-                  src={item.model.photo_url}
-                  alt={item.model.reference_code}
-                  style={{
-                    width: '76px',
-                    height: '76px',
-                    borderRadius: 'var(--radius-md)',
-                    objectFit: 'cover',
-                    flexShrink: 0,
-                    border: '1px solid var(--border-subtle)',
-                  }}
-                />
-              ) : (
-                <div
-                  style={{
-                    width: '76px',
-                    height: '76px',
-                    borderRadius: 'var(--radius-md)',
-                    background: 'rgba(255, 255, 255, 0.05)',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    flexShrink: 0,
-                    fontSize: '1.8rem',
-                  }}
-                >
-                  👟
-                </div>
-              )}
-
-              {/* Main Model Information */}
-              <div style={{ flex: 1, minWidth: '220px' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap', marginBottom: '0.35rem' }}>
-                  <h3 className="ref-code" style={{ fontSize: '1.25rem' }}>
-                    {displayTitle}
-                  </h3>
-
-                  {/* Duplicate Disambiguation Badge (FR-4.8) */}
-                  {item.totalEntriesWithCode > 1 && (
-                    <span
-                      className="badge badge-amber"
-                      title="Plusieurs modèles portent cette même référence (autorisé FR-4.7)"
-                    >
-                      <Layers size={12} />
-                      <span>{item.totalEntriesWithCode} fiches réf. (Index #{item.displayIndex})</span>
-                    </span>
-                  )}
-
-                  {item.model.size_range && (
-                    <span className="badge badge-neutral">
-                      Pointures: {item.model.size_range}
-                    </span>
-                  )}
-
-                  {item.model.price && (
-                    <span className="badge badge-emerald">
-                      {item.model.price.toFixed(2)} DH
-                    </span>
-                  )}
-                </div>
-
-                {item.model.name && (
-                  <p style={{ fontSize: '0.88rem', color: 'var(--text-secondary)', marginBottom: '0.65rem' }}>
-                    {item.model.name}
-                  </p>
-                )}
-
-                {/* Physical Location Chips (Where is this model?) */}
-                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.45rem', alignItems: 'center' }}>
-                  <span style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-muted)' }}>
-                    Emplacement(s) :
-                  </span>
-
-                  {item.sections.length > 0 ? (
-                    item.sections.map((loc) => (
-                      <span
-                        key={loc.section.id}
-                        className="badge"
-                        style={{
-                          background: 'rgba(245, 158, 11, 0.12)',
-                          color: '#fbbf24',
-                          border: '1px solid rgba(245, 158, 11, 0.25)',
-                          fontSize: '0.8rem',
-                          padding: '0.3rem 0.65rem',
-                        }}
-                      >
-                        <MapPin size={12} />
-                        <span>
-                          <strong>{loc.section.name}</strong> ({loc.area.name})
-                          {isSearchEverywhere && ` — ${loc.warehouse.name.split(' ')[0]}`}
-                        </span>
-                      </span>
-                    ))
-                  ) : (
-                    <span className="badge badge-rose" style={{ fontSize: '0.78rem' }}>
-                      <AlertCircle size={12} />
-                      Non assigné à un rayon
-                    </span>
-                  )}
-                </div>
-              </div>
-
-              {/* Action Buttons: Quick Move / Transfer & Details */}
-              <div
-                style={{
-                  display: 'flex',
-                  flexDirection: 'row',
-                  gap: '0.5rem',
-                  alignSelf: 'center',
-                }}
-              >
-                <button
-                  type="button"
-                  onClick={() => onInitiateTransfer(item.model, item.sections[0]?.section.id)}
-                  className="btn btn-primary"
-                  style={{
-                    padding: '0.55rem 0.95rem',
-                    fontSize: '0.85rem',
-                    gap: '0.4rem',
-                  }}
-                  title="Déplacer vers un autre rayon"
-                >
-                  <ArrowRightLeft size={16} />
-                  <span>Transférer</span>
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => onViewModelDetails(item)}
-                  className="btn btn-secondary"
-                  style={{
-                    padding: '0.55rem 0.85rem',
-                    fontSize: '0.85rem',
-                  }}
-                  title="Détails, historique et code-barres"
-                >
-                  Détails
-                </button>
-              </div>
-            </div>
-          );
-        })}
-
-        {/* Empty State when no results found */}
-        {searchResults.length === 0 && (
+      {/* Results Section */}
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+        {/* State 1: Idle (User has not started typing yet) -> Models are NOT loaded/shown */}
+        {!isTyping && (
           <div
-            className="glass-panel fade-in"
+            className="card fade-in"
             style={{
-              padding: '3rem 1.5rem',
+              padding: '2.5rem 1.5rem',
               textAlign: 'center',
-              marginTop: '1rem',
+              marginTop: '0.25rem',
             }}
           >
             <div
               style={{
-                width: '56px',
-                height: '56px',
+                width: '52px',
+                height: '52px',
                 borderRadius: '50%',
-                background: 'rgba(244, 63, 94, 0.15)',
-                color: '#fb7185',
+                background: 'var(--accent-light)',
+                color: 'var(--accent-dark)',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
                 margin: '0 auto 1rem auto',
               }}
             >
-              <AlertCircle size={28} />
+              <Search size={26} />
             </div>
 
-            <h4 style={{ fontSize: '1.15rem', fontWeight: 800, marginBottom: '0.35rem' }}>
-              Aucun modèle trouvé pour "{query}"
+            <h3 style={{ fontSize: '1.05rem', fontWeight: 700, color: 'var(--text-primary)', marginBottom: '0.4rem' }}>
+              Recherche de modèles
+            </h3>
+            <p style={{ color: 'var(--text-secondary)', fontSize: '0.875rem', maxWidth: '420px', margin: '0 auto 1.25rem auto', lineHeight: 1.5 }}>
+              Tapez une référence de chaussure (ex: <strong>HS-21</strong>), un nom ou un rayon pour afficher les modèles.
+            </p>
+
+            {/* Quick reference examples for fast lookup and testing */}
+            <div style={{ marginBottom: '1.25rem' }}>
+              <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', display: 'block', marginBottom: '0.5rem', fontWeight: 600 }}>
+                Exemples rapides :
+              </span>
+              <div style={{ display: 'flex', justifyContent: 'center', flexWrap: 'wrap', gap: '0.4rem' }}>
+                {['HS-21', 'RS-90', 'CL-01', 'BT-42', 'SP-10'].map((sampleRef) => (
+                  <button
+                    key={sampleRef}
+                    type="button"
+                    onClick={() => setQuery(sampleRef)}
+                    className="badge ref-code"
+                    style={{
+                      background: 'var(--bg-card)',
+                      border: '1px solid var(--border-default)',
+                      padding: '0.35rem 0.65rem',
+                      cursor: 'pointer',
+                      fontSize: '0.8125rem',
+                      borderRadius: 'var(--radius-sm)',
+                      color: 'var(--text-primary)',
+                      transition: 'all 0.15s ease',
+                    }}
+                  >
+                    {sampleRef}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <button
+              type="button"
+              onClick={onOpenBarcodeScanner}
+              className="btn btn-secondary"
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '0.45rem',
+                padding: '0.5rem 1rem',
+                fontSize: '0.8125rem',
+                margin: '0 auto',
+              }}
+            >
+              <ScanBarcode size={16} />
+              <span>Scanner un code-barres</span>
+            </button>
+          </div>
+        )}
+
+        {/* State 2: User started typing -> Show matching models */}
+        {isTyping &&
+          searchResults.map((item) => {
+            const displayTitle = getModelDisplayReference(
+              item.model.reference_code,
+              item.displayIndex,
+              item.totalEntriesWithCode
+            );
+
+            return (
+              <div
+                key={item.model.id}
+                className="card"
+                style={{
+                  padding: '1rem',
+                  display: 'flex',
+                  gap: '0.85rem',
+                  alignItems: 'flex-start',
+                  flexWrap: 'wrap',
+                  cursor: 'pointer',
+                }}
+                onClick={() => onViewModelDetails(item)}
+              >
+                {/* Photo Thumbnail */}
+                {item.model.photo_url ? (
+                  <img
+                    src={item.model.photo_url}
+                    alt={item.model.reference_code}
+                    style={{
+                      width: '64px',
+                      height: '64px',
+                      borderRadius: 'var(--radius-sm)',
+                      objectFit: 'cover',
+                      flexShrink: 0,
+                      border: '1px solid var(--border-default)',
+                    }}
+                  />
+                ) : (
+                  <div
+                    style={{
+                      width: '64px',
+                      height: '64px',
+                      borderRadius: 'var(--radius-sm)',
+                      background: 'var(--bg-input)',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      flexShrink: 0,
+                      fontSize: '1.5rem',
+                    }}
+                  >
+                    👟
+                  </div>
+                )}
+
+                {/* Main Model Information */}
+                <div style={{ flex: 1, minWidth: '180px' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', flexWrap: 'wrap', marginBottom: '0.3rem' }}>
+                    <h3 className="ref-code" style={{ fontSize: '1.0625rem' }}>
+                      {displayTitle}
+                    </h3>
+
+                    {/* Duplicate Disambiguation Badge (FR-4.8) */}
+                    {item.totalEntriesWithCode > 1 && (
+                      <span
+                        className="badge badge-amber"
+                        title="Plusieurs modèles portent cette même référence (FR-4.7)"
+                      >
+                        <Layers size={11} />
+                        <span>{item.totalEntriesWithCode} fiches</span>
+                      </span>
+                    )}
+
+                    {item.model.size_range && (
+                      <span className="badge badge-neutral">
+                        {item.model.size_range}
+                      </span>
+                    )}
+
+                    {item.model.price && (
+                      <span className="badge badge-emerald">
+                        {item.model.price.toFixed(2)} DH
+                      </span>
+                    )}
+                  </div>
+
+                  {item.model.name && (
+                    <p style={{ fontSize: '0.8125rem', color: 'var(--text-secondary)', marginBottom: '0.5rem' }}>
+                      {item.model.name}
+                    </p>
+                  )}
+
+                  {/* Physical Location Chips */}
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.35rem', alignItems: 'center' }}>
+                    {item.sections.length > 0 ? (
+                      item.sections.map((loc) => (
+                        <span
+                          key={loc.section.id}
+                          className="badge"
+                          style={{
+                            background: 'var(--accent-light)',
+                            color: 'var(--accent-dark)',
+                            fontSize: '0.75rem',
+                            padding: '0.25rem 0.55rem',
+                          }}
+                        >
+                          <MapPin size={11} />
+                          <span>
+                            <strong>{loc.section.name}</strong> ({loc.area.name})
+                            {isSearchEverywhere && ` — ${loc.warehouse.name.split(' ')[0]}`}
+                          </span>
+                        </span>
+                      ))
+                    ) : (
+                      <span className="badge badge-rose" style={{ fontSize: '0.75rem' }}>
+                        <AlertCircle size={11} />
+                        Non assigné
+                      </span>
+                    )}
+                  </div>
+                </div>
+
+                {/* Action Buttons */}
+                <div
+                  style={{
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: '0.35rem',
+                    alignSelf: 'center',
+                  }}
+                >
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onInitiateTransfer(item.model, item.sections[0]?.section.id);
+                    }}
+                    className="btn btn-primary"
+                    style={{
+                      padding: '0.45rem 0.85rem',
+                      fontSize: '0.8rem',
+                      gap: '0.35rem',
+                    }}
+                    title="Transférer"
+                  >
+                    <ArrowRightLeft size={14} />
+                    <span>Transférer</span>
+                  </button>
+                </div>
+              </div>
+            );
+          })}
+
+        {/* State 3: User typed but zero matches found */}
+        {isTyping && searchResults.length === 0 && (
+          <div
+            className="card fade-in"
+            style={{
+              padding: '3rem 1.5rem',
+              textAlign: 'center',
+              marginTop: '0.5rem',
+            }}
+          >
+            <div
+              style={{
+                width: '48px',
+                height: '48px',
+                borderRadius: '50%',
+                background: 'var(--danger-light)',
+                color: 'var(--danger)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                margin: '0 auto 0.75rem auto',
+              }}
+            >
+              <AlertCircle size={24} />
+            </div>
+
+            <h4 style={{ fontSize: '1rem', fontWeight: 700, marginBottom: '0.3rem', color: 'var(--text-primary)' }}>
+              Aucun résultat pour "{query}"
             </h4>
-            <p style={{ color: 'var(--text-muted)', fontSize: '0.85rem', maxWidth: '420px', margin: '0 auto 1.25rem auto' }}>
-              Cette recherche infructueuse a été enregistrée dans le journal d’audit pour analyse des ruptures de stock.
+            <p style={{ color: 'var(--text-muted)', fontSize: '0.8125rem', maxWidth: '380px', margin: '0 auto 1rem auto' }}>
+              Cette recherche a été enregistrée dans le journal d'audit.
             </p>
 
             {!isSearchEverywhere && (
               <button
                 type="button"
                 onClick={() => setIsSearchEverywhere(true)}
-                className="btn btn-indigo"
-                style={{ gap: '0.45rem' }}
+                className="btn btn-secondary"
+                style={{ gap: '0.4rem' }}
               >
-                <Globe size={16} />
-                <span>Rechercher dans tous les autres entrepôts</span>
+                <Globe size={15} />
+                <span>Chercher partout</span>
               </button>
             )}
           </div>

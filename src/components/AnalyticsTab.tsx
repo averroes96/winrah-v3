@@ -114,12 +114,12 @@ export const AnalyticsTab: React.FC<AnalyticsTabProps> = ({
     <div className="fade-in">
       {/* ZERO-RESULT SEARCHES ALERT CARD (Crucial BRD requirement for gap analysis) */}
       <div
-        className="glass-panel"
+        className="card"
         style={{
           padding: '1.25rem',
-          marginBottom: '1.25rem',
-          background: 'rgba(244, 63, 94, 0.08)',
-          border: '1px solid rgba(244, 63, 94, 0.35)',
+          marginBottom: '1rem',
+          background: 'var(--danger-light)',
+          border: '1px solid var(--danger)',
         }}
       >
         <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem', marginBottom: '0.75rem' }}>
@@ -127,9 +127,9 @@ export const AnalyticsTab: React.FC<AnalyticsTabProps> = ({
             style={{
               width: '36px',
               height: '36px',
-              borderRadius: 'var(--radius-md)',
-              background: 'rgba(244, 63, 94, 0.2)',
-              color: '#fb7185',
+              borderRadius: 'var(--radius-sm)',
+              background: 'var(--danger-light)',
+              color: 'var(--danger)',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
@@ -138,7 +138,7 @@ export const AnalyticsTab: React.FC<AnalyticsTabProps> = ({
             <AlertTriangle size={20} />
           </div>
           <div>
-            <h3 style={{ fontSize: '1.1rem', fontWeight: 800, color: '#fb7185' }}>
+            <h3 style={{ fontSize: '1rem', fontWeight: 700, color: 'var(--danger)' }}>
               Recherches sans résultat — Gaps de stock détectés ({zeroResultSearches.length})
             </h3>
             <p style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>
@@ -159,15 +159,15 @@ export const AnalyticsTab: React.FC<AnalyticsTabProps> = ({
                 key={item.query}
                 style={{
                   padding: '0.55rem 0.85rem',
-                  background: 'rgba(9, 13, 22, 0.7)',
-                  border: '1px solid rgba(244, 63, 94, 0.3)',
-                  borderRadius: 'var(--radius-md)',
+                  background: 'var(--bg-card)',
+                  border: '1px solid var(--danger)',
+                  borderRadius: 'var(--radius-sm)',
                   display: 'flex',
                   alignItems: 'center',
                   gap: '0.65rem',
                 }}
               >
-                <span className="ref-code" style={{ fontSize: '1.05rem', color: '#fb7185' }}>
+                <span className="ref-code" style={{ fontSize: '1rem', color: 'var(--danger)' }}>
                   {item.query}
                 </span>
                 <span className="badge badge-rose" style={{ fontSize: '0.75rem' }}>
@@ -189,9 +189,9 @@ export const AnalyticsTab: React.FC<AnalyticsTabProps> = ({
         }}
       >
         {/* Most Searched */}
-        <div className="glass-panel" style={{ padding: '1.25rem' }}>
+        <div className="card" style={{ padding: '1.25rem' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '1rem' }}>
-            <TrendingUp size={18} style={{ color: 'var(--primary)' }} />
+            <TrendingUp size={18} style={{ color: 'var(--accent)' }} />
             <h3 style={{ fontSize: '0.98rem', fontWeight: 800 }}>Modèles les plus recherchés</h3>
           </div>
 
@@ -209,8 +209,9 @@ export const AnalyticsTab: React.FC<AnalyticsTabProps> = ({
                     alignItems: 'center',
                     justifyContent: 'space-between',
                     padding: '0.5rem 0.75rem',
-                    background: 'rgba(9, 13, 22, 0.4)',
+                    background: 'var(--bg-page)',
                     borderRadius: 'var(--radius-sm)',
+                    border: '1px solid var(--border-default)',
                   }}
                 >
                   <span className="ref-code">{item.query}</span>
@@ -222,9 +223,9 @@ export const AnalyticsTab: React.FC<AnalyticsTabProps> = ({
         </div>
 
         {/* Most Moved / Transferred */}
-        <div className="glass-panel" style={{ padding: '1.25rem' }}>
+        <div className="card" style={{ padding: '1.25rem' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '1rem' }}>
-            <ArrowRightLeft size={18} style={{ color: '#818cf8' }} />
+            <ArrowRightLeft size={18} style={{ color: 'var(--info)' }} />
             <h3 style={{ fontSize: '0.98rem', fontWeight: 800 }}>Modèles les plus déplacés</h3>
           </div>
 
@@ -242,8 +243,9 @@ export const AnalyticsTab: React.FC<AnalyticsTabProps> = ({
                     alignItems: 'center',
                     justifyContent: 'space-between',
                     padding: '0.5rem 0.75rem',
-                    background: 'rgba(9, 13, 22, 0.4)',
+                    background: 'var(--bg-page)',
                     borderRadius: 'var(--radius-sm)',
+                    border: '1px solid var(--border-default)',
                   }}
                 >
                   <span className="ref-code">
@@ -258,9 +260,9 @@ export const AnalyticsTab: React.FC<AnalyticsTabProps> = ({
       </div>
 
       {/* Audit Log Stream (FR-8.1) */}
-      <div className="glass-panel" style={{ padding: '1.25rem' }}>
+      <div className="card" style={{ padding: '1.25rem' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '1rem' }}>
-          <Clock size={18} style={{ color: 'var(--primary)' }} />
+          <Clock size={18} style={{ color: 'var(--accent)' }} />
           <h3 style={{ fontSize: '0.98rem', fontWeight: 800 }}>
             Journal d’audit & d'activité ({searchLogs.length + transfers.length} événements)
           </h3>
@@ -284,9 +286,9 @@ export const AnalyticsTab: React.FC<AnalyticsTabProps> = ({
                 justifyContent: 'space-between',
                 padding: '0.45rem 0.75rem',
                 fontSize: '0.78rem',
-                background: 'rgba(9, 13, 22, 0.3)',
+                background: 'var(--bg-page)',
                 borderRadius: 'var(--radius-sm)',
-                borderLeft: `3px solid ${log.result_count > 0 ? '#fbbf24' : '#fb7185'}`,
+                borderLeft: `3px solid ${log.result_count > 0 ? 'var(--accent)' : 'var(--danger)'}`,
               }}
             >
               <div>
@@ -296,7 +298,7 @@ export const AnalyticsTab: React.FC<AnalyticsTabProps> = ({
                 <span className="ref-code" style={{ marginRight: '0.45rem' }}>
                   "{log.query_text}"
                 </span>
-                <span style={{ color: log.result_count > 0 ? '#34d399' : '#fb7185' }}>
+                <span style={{ color: log.result_count > 0 ? 'var(--success)' : 'var(--danger)' }}>
                   ({log.result_count} résultat{log.result_count > 1 ? 's' : ''})
                 </span>
               </div>

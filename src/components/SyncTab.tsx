@@ -22,7 +22,7 @@ import {
 import { syncEngine, SyncEngineStatus } from '../lib/syncEngine';
 import { db } from '../db/indexedDb';
 import { SyncQueueItem, SyncLog } from '../types';
-import confetti from 'canvas-confetti';
+
 
 interface SyncTabProps {
   onOpenDevicePairing: () => void;
@@ -69,7 +69,7 @@ export const SyncTab: React.FC<SyncTabProps> = ({
     await syncEngine.syncNow();
     await loadData();
     onRefreshData();
-    confetti({ particleCount: 30, spread: 50 });
+
   };
 
   const handleSimulateConflict = async () => {
@@ -85,7 +85,7 @@ export const SyncTab: React.FC<SyncTabProps> = ({
     await syncEngine.resolveConflict(conflictId, resolution);
     await loadData();
     onRefreshData();
-    confetti({ particleCount: 40, spread: 60 });
+
   };
 
   const handleSaveSupabaseConfig = (e: React.FormEvent) => {
@@ -100,7 +100,7 @@ export const SyncTab: React.FC<SyncTabProps> = ({
     <div className="fade-in">
       {/* Top Sync Hero Card */}
       <div
-        className="glass-panel"
+        className="card"
         style={{
           padding: '1.25rem',
           marginBottom: '1.25rem',
@@ -114,19 +114,14 @@ export const SyncTab: React.FC<SyncTabProps> = ({
         <div style={{ display: 'flex', alignItems: 'center', gap: '0.85rem' }}>
           <div
             style={{
-              width: '46px',
-              height: '46px',
-              borderRadius: 'var(--radius-md)',
-              background: status.isOnline
-                ? 'linear-gradient(135deg, #10b981 0%, #059669 100%)'
-                : 'linear-gradient(135deg, #f43f5e 0%, #e11d48 100%)',
-              color: 'white',
+              width: '42px',
+              height: '42px',
+              borderRadius: 'var(--radius-sm)',
+              background: status.isOnline ? 'var(--success-light)' : 'var(--danger-light)',
+              color: status.isOnline ? 'var(--success)' : 'var(--danger)',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
-              boxShadow: status.isOnline
-                ? '0 4px 14px rgba(16, 185, 129, 0.3)'
-                : '0 4px 14px rgba(244, 63, 94, 0.3)',
             }}
           >
             <Database size={24} />
@@ -180,18 +175,18 @@ export const SyncTab: React.FC<SyncTabProps> = ({
       {/* Conflict Resolution Center (FR-7.6) */}
       {conflicts.length > 0 ? (
         <div
-          className="glass-panel fade-in"
+          className="card fade-in"
           style={{
             padding: '1.25rem',
-            marginBottom: '1.5rem',
-            border: '1px solid var(--rose)',
-            background: 'rgba(244, 63, 94, 0.08)',
+            marginBottom: '1rem',
+            border: '1px solid var(--danger)',
+            background: 'var(--danger-light)',
           }}
         >
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '1rem' }}>
-            <AlertTriangle size={20} style={{ color: '#fb7185' }} />
+            <AlertTriangle size={20} style={{ color: 'var(--danger)' }} />
             <div>
-              <h3 style={{ fontSize: '1.05rem', fontWeight: 800, color: '#fb7185' }}>
+              <h3 style={{ fontSize: '1.05rem', fontWeight: 700, color: 'var(--danger)' }}>
                 Conflits de synchronisation détectés ({conflicts.length})
               </h3>
               <p style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>
@@ -205,8 +200,8 @@ export const SyncTab: React.FC<SyncTabProps> = ({
               <div
                 key={c.id}
                 style={{
-                  background: 'rgba(9, 13, 22, 0.7)',
-                  border: '1px solid var(--border-subtle)',
+                  background: 'var(--bg-page)',
+                  border: '1px solid var(--border-default)',
                   borderRadius: 'var(--radius-md)',
                   padding: '1rem',
                 }}
@@ -232,13 +227,13 @@ export const SyncTab: React.FC<SyncTabProps> = ({
                   {/* Device Version Card */}
                   <div
                     style={{
-                      background: 'rgba(245, 158, 11, 0.08)',
-                      border: '1px solid rgba(245, 158, 11, 0.25)',
+                      background: 'var(--accent-light)',
+                      border: '1px solid var(--accent)',
                       borderRadius: 'var(--radius-sm)',
                       padding: '0.75rem',
                     }}
                   >
-                    <div style={{ fontWeight: 800, color: '#fbbf24', marginBottom: '0.35rem' }}>
+                    <div style={{ fontWeight: 700, color: 'var(--accent-dark)', marginBottom: '0.35rem' }}>
                       Version de cet appareil
                     </div>
                     <div>Nom : {c.payload.name || 'N/A'}</div>
@@ -251,13 +246,13 @@ export const SyncTab: React.FC<SyncTabProps> = ({
                   {/* Server Version Card */}
                   <div
                     style={{
-                      background: 'rgba(99, 102, 241, 0.08)',
-                      border: '1px solid rgba(99, 102, 241, 0.25)',
+                      background: 'var(--info-light)',
+                      border: '1px solid var(--info)',
                       borderRadius: 'var(--radius-sm)',
                       padding: '0.75rem',
                     }}
                   >
-                    <div style={{ fontWeight: 800, color: '#818cf8', marginBottom: '0.35rem' }}>
+                    <div style={{ fontWeight: 700, color: 'var(--info)', marginBottom: '0.35rem' }}>
                       Version du Serveur Central
                     </div>
                     <div>Enregistrement actif sur le serveur</div>
@@ -294,21 +289,21 @@ export const SyncTab: React.FC<SyncTabProps> = ({
       ) : (
         /* Test Tool: Conflict Simulator Button */
         <div
-          className="glass-panel"
+          className="card"
           style={{
             padding: '1rem 1.25rem',
-            marginBottom: '1.25rem',
+            marginBottom: '1rem',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'space-between',
             flexWrap: 'wrap',
             gap: '0.75rem',
-            background: 'rgba(245, 158, 11, 0.05)',
-            border: '1px dashed var(--primary)',
+            background: 'var(--accent-light)',
+            border: '1px dashed var(--accent)',
           }}
         >
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem' }}>
-            <Sparkles size={18} style={{ color: '#fbbf24' }} />
+            <Sparkles size={18} style={{ color: 'var(--accent)' }} />
             <div>
               <div style={{ fontWeight: 700, fontSize: '0.88rem' }}>
                 Test local : Simuler un conflit hors-ligne (FR-7.6)
@@ -331,9 +326,9 @@ export const SyncTab: React.FC<SyncTabProps> = ({
       )}
 
       {/* Supabase Live Configuration (TDD §6) */}
-      <div className="glass-panel" style={{ padding: '1.25rem', marginBottom: '1.5rem' }}>
+      <div className="card" style={{ padding: '1.25rem', marginBottom: '1rem' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '1rem' }}>
-          <Settings size={18} style={{ color: 'var(--primary)' }} />
+          <Settings size={18} style={{ color: 'var(--accent)' }} />
           <h3 style={{ fontSize: '1rem', fontWeight: 800 }}>
             Connexion Supabase PostgreSQL (Optionnel)
           </h3>
@@ -342,7 +337,7 @@ export const SyncTab: React.FC<SyncTabProps> = ({
         <p style={{ fontSize: '0.78rem', color: 'var(--text-muted)', marginBottom: '1rem' }}>
           Par défaut, WINRAH fonctionne à 100% en local hors-ligne avec IndexedDB. Si vous possédez un
           projet Supabase, collez l’URL et la clé anonyme pour synchroniser avec le cloud (Migrations SQL dans{' '}
-          <code style={{ color: '#fbbf24' }}>/supabase/migrations/</code>).
+          <code style={{ color: 'var(--accent-dark)' }}>/supabase/migrations/</code>).
         </p>
 
         <form onSubmit={handleSaveSupabaseConfig} style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
@@ -377,7 +372,7 @@ export const SyncTab: React.FC<SyncTabProps> = ({
               Enregistrer configuration
             </button>
             {isSavedSupabase && (
-              <span style={{ fontSize: '0.8rem', color: '#34d399', fontWeight: 700 }}>
+              <span style={{ fontSize: '0.8rem', color: 'var(--success)', fontWeight: 700 }}>
                 ✓ Enregistré !
               </span>
             )}
@@ -386,9 +381,9 @@ export const SyncTab: React.FC<SyncTabProps> = ({
       </div>
 
       {/* Sync Audit History */}
-      <div className="glass-panel" style={{ padding: '1.25rem' }}>
+      <div className="card" style={{ padding: '1.25rem' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '1rem' }}>
-          <Clock size={18} style={{ color: 'var(--primary)' }} />
+          <Clock size={18} style={{ color: 'var(--accent)' }} />
           <h3 style={{ fontSize: '1rem', fontWeight: 800 }}>Historique des synchronisations</h3>
         </div>
 
@@ -406,14 +401,14 @@ export const SyncTab: React.FC<SyncTabProps> = ({
                   alignItems: 'center',
                   justifyContent: 'space-between',
                   padding: '0.65rem 0.85rem',
-                  background: 'rgba(9, 13, 22, 0.5)',
-                  border: '1px solid var(--border-subtle)',
-                  borderRadius: 'var(--radius-md)',
+                  background: 'var(--bg-page)',
+                  border: '1px solid var(--border-default)',
+                  borderRadius: 'var(--radius-sm)',
                   fontSize: '0.8rem',
                 }}
               >
                 <div>
-                  <span style={{ fontWeight: 700, color: '#fbbf24', marginRight: '0.5rem' }}>
+                    <span style={{ fontWeight: 700, color: 'var(--text-primary)', marginRight: '0.5rem' }}>
                     {log.direction === 'device_to_device'
                       ? '📱 Échange Direct Pair-à-Pair'
                       : '☁️ Synchro Serveur'}

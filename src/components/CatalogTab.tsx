@@ -33,7 +33,7 @@ import {
   downloadBlob,
   CsvImportRow,
 } from '../lib/csvHelper';
-import confetti from 'canvas-confetti';
+
 
 interface CatalogTabProps {
   warehouses: Warehouse[];
@@ -72,6 +72,7 @@ export const CatalogTab: React.FC<CatalogTabProps> = ({
   const [newModelSize, setNewModelSize] = useState('36/41');
   const [newModelPrice, setNewModelPrice] = useState('');
   const [newModelSectionId, setNewModelSectionId] = useState('');
+  const [modelSearchQuery, setModelSearchQuery] = useState('');
 
   // CSV Import State
   const [csvContent, setCsvContent] = useState('');
@@ -180,7 +181,7 @@ export const CatalogTab: React.FC<CatalogTabProps> = ({
     setNewModelName('');
     setNewModelPrice('');
     setIsAddModelOpen(false);
-    confetti({ particleCount: 40, spread: 50 });
+
     onRefreshData();
   };
 
@@ -241,7 +242,7 @@ export const CatalogTab: React.FC<CatalogTabProps> = ({
     setImportSuccessMessage(`${importedCount} modèle(s) importé(s) avec succès !`);
     setCsvContent('');
     setParsedRows([]);
-    confetti({ particleCount: 50, spread: 60 });
+
     onRefreshData();
   };
 
@@ -305,7 +306,7 @@ export const CatalogTab: React.FC<CatalogTabProps> = ({
           style={{ padding: '0.45rem 0.85rem', fontSize: '0.82rem', gap: '0.4rem' }}
           title="Exporter tout le catalogue au format CSV"
         >
-          <Download size={15} style={{ color: 'var(--primary)' }} />
+          <Download size={15} style={{ color: 'var(--accent)' }} />
           <span>Export CSV</span>
         </button>
       </div>
@@ -352,10 +353,10 @@ export const CatalogTab: React.FC<CatalogTabProps> = ({
               );
 
               return (
-                <div key={area.id} className="glass-panel" style={{ padding: '1rem' }}>
+                <div key={area.id} className="card" style={{ padding: '1rem' }}>
                   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.75rem' }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                      <MapPin size={18} style={{ color: 'var(--primary)' }} />
+                      <MapPin size={18} style={{ color: 'var(--accent)' }} />
                       <h4 style={{ fontSize: '1rem', fontWeight: 800 }}>{area.name}</h4>
                       <span className="badge badge-neutral" style={{ fontSize: '0.7rem' }}>
                         {areaSections.length} rayon(s)
@@ -384,13 +385,13 @@ export const CatalogTab: React.FC<CatalogTabProps> = ({
                         <div
                           key={sec.id}
                           style={{
-                            background: 'rgba(9, 13, 22, 0.5)',
-                            border: '1px solid var(--border-subtle)',
+                            background: 'var(--bg-page)',
+                            border: '1px solid var(--border-default)',
                             borderRadius: 'var(--radius-md)',
                             padding: '0.75rem',
                           }}
                         >
-                          <div style={{ fontWeight: 700, fontSize: '0.9rem', color: '#fbbf24' }}>
+                          <div style={{ fontWeight: 700, fontSize: '0.9rem', color: 'var(--text-primary)' }}>
                             {sec.name}
                           </div>
                           {sec.capacity && (
@@ -415,7 +416,7 @@ export const CatalogTab: React.FC<CatalogTabProps> = ({
       {/* 2. Models Catalog View */}
       {activeSubTab === 'models' && (
         <div className="fade-in">
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.85rem' }}>
             <h3 style={{ fontSize: '1.05rem', fontWeight: 800 }}>Fiches Modèles ({models.length})</h3>
             <button
               type="button"
@@ -428,11 +429,32 @@ export const CatalogTab: React.FC<CatalogTabProps> = ({
             </button>
           </div>
 
+          {/* Quick search input */}
+          <div style={{ marginBottom: '0.85rem' }}>
+            <input
+              type="text"
+              className="input-control"
+              placeholder="Filtrer par référence ou nom (ex: HS-21)…"
+              value={modelSearchQuery}
+              onChange={(e) => setModelSearchQuery(e.target.value)}
+              style={{ fontSize: '0.8125rem' }}
+            />
+          </div>
+
           <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-            {models.map((m) => (
+            {models
+              .filter((m) => {
+                if (!modelSearchQuery.trim()) return true;
+                const q = modelSearchQuery.trim().toUpperCase();
+                return (
+                  m.reference_code.toUpperCase().includes(q) ||
+                  (m.name && m.name.toUpperCase().includes(q))
+                );
+              })
+              .map((m) => (
               <div
                 key={m.id}
-                className="glass-panel"
+                className="card"
                 style={{
                   padding: '0.75rem 1rem',
                   display: 'flex',
@@ -474,7 +496,7 @@ export const CatalogTab: React.FC<CatalogTabProps> = ({
 
       {/* 3. CSV Import View (FR-4.5, FR-9.2) */}
       {activeSubTab === 'import' && (
-        <div className="glass-panel fade-in" style={{ padding: '1.25rem' }}>
+        <div className="card fade-in" style={{ padding: '1.25rem' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
             <div>
               <h3 style={{ fontSize: '1.05rem', fontWeight: 800 }}>Import CSV en masse</h3>
@@ -527,16 +549,16 @@ export const CatalogTab: React.FC<CatalogTabProps> = ({
             <div
               style={{
                 padding: '0.85rem',
-                background: 'rgba(244, 63, 94, 0.15)',
-                border: '1px solid rgba(244, 63, 94, 0.3)',
+                background: 'var(--danger-light)',
+                border: '1px solid var(--danger)',
                 borderRadius: 'var(--radius-md)',
                 marginBottom: '1rem',
               }}
             >
-              <h4 style={{ color: '#fb7185', fontSize: '0.85rem', fontWeight: 700, marginBottom: '0.35rem' }}>
+              <h4 style={{ color: 'var(--danger)', fontSize: '0.85rem', fontWeight: 700, marginBottom: '0.35rem' }}>
                 Erreurs de validation détectées :
               </h4>
-              <ul style={{ paddingLeft: '1.25rem', fontSize: '0.8rem', color: '#fda4af' }}>
+              <ul style={{ paddingLeft: '1.25rem', fontSize: '0.8rem', color: 'var(--danger)' }}>
                 {csvValidationErrors.map((err, i) => (
                   <li key={i}>
                     Ligne {err.line} : {err.message}
@@ -550,10 +572,10 @@ export const CatalogTab: React.FC<CatalogTabProps> = ({
             <div
               style={{
                 padding: '0.85rem',
-                background: 'rgba(16, 185, 129, 0.15)',
-                border: '1px solid rgba(16, 185, 129, 0.3)',
+                background: 'var(--success-light)',
+                border: '1px solid var(--success)',
                 borderRadius: 'var(--radius-md)',
-                color: '#34d399',
+                color: 'var(--success)',
                 fontSize: '0.85rem',
                 fontWeight: 700,
               }}
@@ -570,8 +592,7 @@ export const CatalogTab: React.FC<CatalogTabProps> = ({
           style={{
             position: 'fixed',
             inset: 0,
-            background: 'rgba(0,0,0,0.7)',
-            backdropFilter: 'blur(6px)',
+            background: 'rgba(0,0,0,0.3)',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
@@ -579,7 +600,7 @@ export const CatalogTab: React.FC<CatalogTabProps> = ({
             zIndex: 250,
           }}
         >
-          <div className="glass-panel" style={{ width: '100%', maxWidth: '420px', padding: '1.5rem' }}>
+          <div className="card" style={{ width: '100%', maxWidth: '420px', padding: '1.5rem' }}>
             <h3 style={{ fontSize: '1.1rem', fontWeight: 800, marginBottom: '1rem' }}>
               Nouvelle Zone ({activeWarehouse?.name})
             </h3>
@@ -616,8 +637,7 @@ export const CatalogTab: React.FC<CatalogTabProps> = ({
           style={{
             position: 'fixed',
             inset: 0,
-            background: 'rgba(0,0,0,0.7)',
-            backdropFilter: 'blur(6px)',
+            background: 'rgba(0,0,0,0.3)',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
@@ -625,7 +645,7 @@ export const CatalogTab: React.FC<CatalogTabProps> = ({
             zIndex: 250,
           }}
         >
-          <div className="glass-panel" style={{ width: '100%', maxWidth: '440px', padding: '1.5rem' }}>
+          <div className="card" style={{ width: '100%', maxWidth: '440px', padding: '1.5rem' }}>
             <h3 style={{ fontSize: '1.1rem', fontWeight: 800, marginBottom: '1rem' }}>
               Nouveau Rayon / Emplacement
             </h3>
@@ -710,8 +730,7 @@ export const CatalogTab: React.FC<CatalogTabProps> = ({
           style={{
             position: 'fixed',
             inset: 0,
-            background: 'rgba(0,0,0,0.7)',
-            backdropFilter: 'blur(6px)',
+            background: 'rgba(0,0,0,0.3)',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
@@ -719,7 +738,7 @@ export const CatalogTab: React.FC<CatalogTabProps> = ({
             zIndex: 250,
           }}
         >
-          <div className="glass-panel" style={{ width: '100%', maxWidth: '460px', padding: '1.5rem' }}>
+          <div className="card" style={{ width: '100%', maxWidth: '460px', padding: '1.5rem' }}>
             <h3 style={{ fontSize: '1.1rem', fontWeight: 800, marginBottom: '0.25rem' }}>
               Ajouter une fiche modèle
             </h3>

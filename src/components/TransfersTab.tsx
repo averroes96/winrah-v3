@@ -14,7 +14,6 @@ import {
   Search,
   CheckSquare,
   Square,
-  Sparkles,
 } from 'lucide-react';
 import {
   ShoeModel,
@@ -25,7 +24,6 @@ import {
   TransferLog,
 } from '../types';
 import { db } from '../db/indexedDb';
-import confetti from 'canvas-confetti';
 
 interface TransfersTabProps {
   models: ShoeModel[];
@@ -163,7 +161,6 @@ export const TransfersTab: React.FC<TransfersTabProps> = ({
       setUndoTimerSeconds(15);
     }
 
-    confetti({ particleCount: 50, spread: 60, origin: { y: 0.3 } });
     setSelectedModelIds(new Set());
     onRefreshData();
   };
@@ -203,27 +200,27 @@ export const TransfersTab: React.FC<TransfersTabProps> = ({
       {/* Undo Grace Window Banner (FR-6.6) */}
       {lastTransferLog && undoTimerSeconds > 0 && (
         <div
-          className="glass-panel fade-in"
+          className="card fade-in"
           style={{
-            padding: '0.85rem 1.25rem',
+            padding: '0.75rem 1rem',
             marginBottom: '1rem',
-            background: 'rgba(245, 158, 11, 0.15)',
-            border: '1px solid var(--primary)',
+            background: 'var(--success-light)',
+            border: '1px solid var(--success)',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'space-between',
             flexWrap: 'wrap',
-            gap: '0.65rem',
+            gap: '0.5rem',
           }}
         >
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem' }}>
-            <CheckCircle2 size={20} style={{ color: '#fbbf24' }} />
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+            <CheckCircle2 size={18} style={{ color: 'var(--success)' }} />
             <div>
-              <div style={{ fontWeight: 700, fontSize: '0.92rem' }}>
-                Transfert enregistré avec succès !
+              <div style={{ fontWeight: 600, fontSize: '0.875rem', color: 'var(--text-primary)' }}>
+                Transfert enregistré
               </div>
-              <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
-                Modèle déplacé vers {sectionMap.get(lastTransferLog.transfer.to_section_id)?.name}
+              <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>
+                Vers {sectionMap.get(lastTransferLog.transfer.to_section_id)?.name}
               </div>
             </div>
           </div>
@@ -233,57 +230,55 @@ export const TransfersTab: React.FC<TransfersTabProps> = ({
             onClick={handleUndoTransfer}
             className="btn btn-secondary"
             style={{
-              padding: '0.45rem 0.95rem',
-              fontSize: '0.82rem',
-              gap: '0.4rem',
+              padding: '0.35rem 0.75rem',
+              fontSize: '0.8rem',
+              gap: '0.35rem',
               borderRadius: 'var(--radius-full)',
-              color: '#fbbf24',
-              borderColor: 'var(--primary)',
             }}
           >
-            <Undo2 size={16} />
+            <Undo2 size={14} />
             <span>Annuler ({undoTimerSeconds}s)</span>
           </button>
         </div>
       )}
 
       {/* Main Transfer Workflow Card (FR-6.1 - FR-6.4) */}
-      <div className="glass-panel" style={{ padding: '1.25rem', marginBottom: '1.5rem' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem', marginBottom: '1.25rem' }}>
+      <div className="card" style={{ padding: '1.25rem', marginBottom: '1rem' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '1.25rem' }}>
           <div
             style={{
               width: '36px',
               height: '36px',
-              borderRadius: 'var(--radius-md)',
-              background: 'rgba(245, 158, 11, 0.2)',
-              color: '#fbbf24',
+              borderRadius: 'var(--radius-sm)',
+              background: 'var(--accent-light)',
+              color: 'var(--accent-dark)',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
             }}
           >
-            <ArrowRightLeft size={20} />
+            <ArrowRightLeft size={18} />
           </div>
           <div>
-            <h2 style={{ fontSize: '1.15rem', fontWeight: 800 }}>Déplacer du stock (Transferts)</h2>
-            <p style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>
-              Sélectionnez les modèles puis indiquez le rayon de destination
+            <h2 style={{ fontSize: '1.0625rem', fontWeight: 700 }}>Déplacer du stock</h2>
+            <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
+              Sélectionnez les modèles puis le rayon de destination
             </p>
           </div>
         </div>
 
         {/* Step 1: Destination Section Selector */}
-        <div style={{ marginBottom: '1.25rem' }}>
-          <label style={{ display: 'block', fontSize: '0.82rem', fontWeight: 700, marginBottom: '0.45rem', color: 'var(--text-secondary)' }}>
-            1. Rayon de destination cible :
+        <div style={{ marginBottom: '1rem' }}>
+          <label style={{ display: 'block', fontSize: '0.8125rem', fontWeight: 500, marginBottom: '0.35rem', color: 'var(--text-secondary)' }}>
+            Rayon de destination
           </label>
           <select
             value={targetSectionId}
             onChange={(e) => setTargetSectionId(e.target.value)}
             className="input-control"
-            style={{ cursor: 'pointer', fontWeight: 600 }}
+            style={{ cursor: 'pointer' }}
           >
-            <option value="">-- Choisir un rayon d’arrivée --</option>
+            <option value="">-- Choisir un rayon --</option>
             {availableSections.map((s) => {
               const area = areaMap.get(s.area_id);
               return (
@@ -296,24 +291,24 @@ export const TransfersTab: React.FC<TransfersTabProps> = ({
         </div>
 
         {/* Step 2: Operator Name Attribution */}
-        <div style={{ marginBottom: '1.25rem' }}>
-          <label style={{ display: 'block', fontSize: '0.82rem', fontWeight: 700, marginBottom: '0.45rem', color: 'var(--text-secondary)' }}>
-            2. Opérateur réalisant le déplacement :
+        <div style={{ marginBottom: '1rem' }}>
+          <label style={{ display: 'block', fontSize: '0.8125rem', fontWeight: 500, marginBottom: '0.35rem', color: 'var(--text-secondary)' }}>
+            Opérateur
           </label>
           <input
             type="text"
             className="input-control"
             value={operatorName}
             onChange={(e) => setOperatorName(e.target.value)}
-            placeholder="Ex: Youssef, Hamza, Équipe Nuit..."
+            placeholder="Ex: Youssef, Hamza…"
           />
         </div>
 
         {/* Step 3: Model Picker (Single or Batch, FR-6.1, FR-6.2) */}
         <div style={{ marginBottom: '1rem' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
-            <label style={{ fontSize: '0.82rem', fontWeight: 700, color: 'var(--text-secondary)' }}>
-              3. Modèles à transférer ({selectedModelIds.size} sélectionné(s)) :
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.4rem' }}>
+            <label style={{ fontSize: '0.8125rem', fontWeight: 500, color: 'var(--text-secondary)' }}>
+              Modèles à transférer ({selectedModelIds.size})
             </label>
             <button
               type="button"
@@ -321,34 +316,64 @@ export const TransfersTab: React.FC<TransfersTabProps> = ({
               style={{
                 background: 'transparent',
                 border: 'none',
-                color: 'var(--primary)',
-                fontSize: '0.78rem',
-                fontWeight: 700,
+                color: 'var(--accent)',
+                fontSize: '0.75rem',
+                fontWeight: 600,
                 cursor: 'pointer',
+                fontFamily: 'var(--font-sans)',
               }}
             >
-              {selectedModelIds.size === selectableModels.length ? 'Désélectionner tout' : 'Tout sélectionner'}
+              {selectedModelIds.size === selectableModels.length ? 'Désélectionner' : 'Tout sélectionner'}
             </button>
+          </div>
+
+          {/* Quick filter by typing */}
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '0.45rem',
+              background: 'var(--bg-input)',
+              border: '1px solid var(--border-default)',
+              borderRadius: 'var(--radius-sm)',
+              padding: '0.35rem 0.65rem',
+              marginBottom: '0.45rem',
+            }}
+          >
+            <Search size={14} style={{ color: 'var(--text-muted)', flexShrink: 0 }} />
+            <input
+              type="text"
+              placeholder="Filtrer les modèles par référence ou nom…"
+              value={searchFilter}
+              onChange={(e) => setSearchFilter(e.target.value)}
+              style={{
+                flex: 1,
+                border: 'none',
+                background: 'transparent',
+                outline: 'none',
+                fontSize: '0.8125rem',
+                color: 'var(--text-primary)',
+              }}
+            />
           </div>
 
           <div
             style={{
               maxHeight: '280px',
               overflowY: 'auto',
-              border: '1px solid var(--border-subtle)',
+              border: '1px solid var(--border-default)',
               borderRadius: 'var(--radius-md)',
-              background: 'rgba(9, 13, 22, 0.6)',
-              padding: '0.5rem',
+              background: 'var(--bg-page)',
+              padding: '0.4rem',
               display: 'flex',
               flexDirection: 'column',
-              gap: '0.4rem',
+              gap: '0.25rem',
             }}
           >
             {selectableModels.map((m) => {
               const isSelected = selectedModelIds.has(m.id);
               const placement = modelSections.find((ms) => ms.model_id === m.id);
               const currentSection = placement ? sectionMap.get(placement.section_id) : null;
-              const currentArea = currentSection ? areaMap.get(currentSection.area_id) : null;
 
               return (
                 <div
@@ -357,59 +382,58 @@ export const TransfersTab: React.FC<TransfersTabProps> = ({
                   style={{
                     display: 'flex',
                     alignItems: 'center',
-                    gap: '0.75rem',
-                    padding: '0.65rem 0.85rem',
+                    gap: '0.6rem',
+                    padding: '0.5rem 0.7rem',
                     borderRadius: 'var(--radius-sm)',
                     cursor: 'pointer',
-                    background: isSelected ? 'rgba(245, 158, 11, 0.15)' : 'transparent',
-                    border: isSelected ? '1px solid rgba(245, 158, 11, 0.3)' : '1px solid transparent',
+                    background: isSelected ? 'var(--accent-light)' : 'transparent',
+                    border: isSelected ? '1px solid var(--accent)' : '1px solid transparent',
+                    transition: 'all 0.1s ease',
                   }}
                 >
                   {isSelected ? (
-                    <CheckSquare size={18} style={{ color: 'var(--primary)', flexShrink: 0 }} />
+                    <CheckSquare size={16} style={{ color: 'var(--accent)', flexShrink: 0 }} />
                   ) : (
-                    <Square size={18} style={{ color: 'var(--text-muted)', flexShrink: 0 }} />
+                    <Square size={16} style={{ color: 'var(--text-muted)', flexShrink: 0 }} />
                   )}
 
                   <div style={{ flex: 1 }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.45rem' }}>
-                      <span className="ref-code" style={{ fontSize: '0.95rem' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                      <span className="ref-code" style={{ fontSize: '0.875rem' }}>
                         {m.reference_code}
                       </span>
                       {m.size_range && (
-                        <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>
+                        <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>
                           ({m.size_range})
                         </span>
                       )}
                     </div>
                     {m.name && (
-                      <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>
+                      <div style={{ fontSize: '0.72rem', color: 'var(--text-secondary)' }}>
                         {m.name}
                       </div>
                     )}
                   </div>
 
-                  {/* Current Location Preview before confirming (FR-6.4) */}
-                  <div style={{ textAlign: 'right' }}>
-                    <span
-                      className="badge"
-                      style={{
-                        background: 'rgba(255, 255, 255, 0.06)',
-                        color: currentSection ? '#fbbf24' : '#fb7185',
-                        fontSize: '0.72rem',
-                      }}
-                    >
-                      <MapPin size={10} />
-                      {currentSection ? currentSection.name : 'Non assigné'}
-                    </span>
-                  </div>
+                  {/* Current Location Preview (FR-6.4) */}
+                  <span
+                    className="badge"
+                    style={{
+                      background: currentSection ? 'var(--accent-light)' : 'var(--danger-light)',
+                      color: currentSection ? 'var(--accent-dark)' : 'var(--danger)',
+                      fontSize: '0.7rem',
+                    }}
+                  >
+                    <MapPin size={10} />
+                    {currentSection ? currentSection.name : 'Non assigné'}
+                  </span>
                 </div>
               );
             })}
           </div>
         </div>
 
-        {/* Confirm Transfer Big Tactile Button (FR Usability) */}
+        {/* Confirm Transfer Button (FR Usability) */}
         <button
           type="button"
           onClick={handleExecuteTransfer}
@@ -417,26 +441,26 @@ export const TransfersTab: React.FC<TransfersTabProps> = ({
           className="btn btn-primary btn-large"
           style={{ width: '100%', gap: '0.5rem' }}
         >
-          <ArrowRightLeft size={20} />
+          <ArrowRightLeft size={18} />
           <span>
-            Confirmer le transfert ({selectedModelIds.size} modèle{selectedModelIds.size > 1 ? 's' : ''})
+            Confirmer ({selectedModelIds.size} modèle{selectedModelIds.size > 1 ? 's' : ''})
           </span>
         </button>
       </div>
 
       {/* Recent Transfer History (FR-6.5) */}
-      <div className="glass-panel" style={{ padding: '1.25rem' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '1rem' }}>
-          <Clock size={18} style={{ color: 'var(--primary)' }} />
-          <h3 style={{ fontSize: '1rem', fontWeight: 800 }}>Historique récent des mouvements</h3>
+      <div className="card" style={{ padding: '1.25rem' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', marginBottom: '0.85rem' }}>
+          <Clock size={16} style={{ color: 'var(--accent)' }} />
+          <h3 style={{ fontSize: '0.9375rem', fontWeight: 700 }}>Historique récent</h3>
         </div>
 
         {transfers.length === 0 ? (
-          <p style={{ color: 'var(--text-muted)', fontSize: '0.85rem' }}>
-            Aucun transfert enregistré pour le moment.
+          <p style={{ color: 'var(--text-muted)', fontSize: '0.8125rem' }}>
+            Aucun transfert enregistré.
           </p>
         ) : (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.65rem' }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
             {transfers.slice(0, 10).map((t) => {
               const model = modelMap.get(t.model_id);
               const fromSec = sectionMap.get(t.from_section_id);
@@ -450,27 +474,27 @@ export const TransfersTab: React.FC<TransfersTabProps> = ({
                     alignItems: 'center',
                     justifyContent: 'space-between',
                     flexWrap: 'wrap',
-                    gap: '0.5rem',
-                    padding: '0.75rem',
-                    background: 'rgba(9, 13, 22, 0.4)',
-                    border: '1px solid var(--border-subtle)',
-                    borderRadius: 'var(--radius-md)',
+                    gap: '0.4rem',
+                    padding: '0.65rem 0.75rem',
+                    background: 'var(--bg-page)',
+                    border: '1px solid var(--border-default)',
+                    borderRadius: 'var(--radius-sm)',
+                    borderLeft: '3px solid var(--accent)',
                   }}
                 >
                   <div>
-                    <span className="ref-code" style={{ fontSize: '0.92rem', marginRight: '0.5rem' }}>
+                    <span className="ref-code" style={{ fontSize: '0.875rem', marginRight: '0.4rem' }}>
                       {model?.reference_code || 'Modèle'}
                     </span>
-                    <span style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
-                      déplacé de <strong>{fromSec?.name || 'Rayon'}</strong> vers{' '}
-                      <strong style={{ color: '#fbbf24' }}>{toSec?.name || 'Rayon'}</strong>
+                    <span style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>
+                      {fromSec?.name || '?'} → <strong>{toSec?.name || '?'}</strong>
                     </span>
-                    <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>
-                      Par {t.performed_by || 'Opérateur'} le {new Date(t.created_at).toLocaleString()}
+                    <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', marginTop: '2px' }}>
+                      {t.performed_by || 'Opérateur'} · {new Date(t.created_at).toLocaleString()}
                     </div>
                   </div>
 
-                  <span className="badge badge-emerald" style={{ fontSize: '0.7rem' }}>
+                  <span className="badge badge-emerald" style={{ fontSize: '0.68rem' }}>
                     Effectué
                   </span>
                 </div>
