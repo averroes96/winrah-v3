@@ -1,0 +1,435 @@
+// ============================================================================
+// WINRAH - Sync Tab & Conflict Resolution Center (FR-7.1 - FR-7.7)
+// Manages offline dirty queue, version-vector conflict resolution,
+// device-to-device pairing launcher, and Supabase live credentials.
+// ============================================================================
+
+import React, { useState, useEffect } from 'react';
+import {
+  RefreshCw,
+  Database,
+  AlertTriangle,
+  QrCode,
+  CheckCircle2,
+  Clock,
+  ShieldCheck,
+  Settings,
+  Sparkles,
+  ArrowRight,
+  GitMerge,
+  ExternalLink,
+} from 'lucide-react';
+import { syncEngine, SyncEngineStatus } from '../lib/syncEngine';
+import { db } from '../db/indexedDb';
+import { SyncQueueItem, SyncLog } from '../types';
+import confetti from 'canvas-confetti';
+
+interface SyncTabProps {
+  onOpenDevicePairing: () => void;
+  onRefreshData: () => void;
+}
+
+export const SyncTab: React.FC<SyncTabProps> = ({
+  onOpenDevicePairing,
+  onRefreshData,
+}) => {
+  const [status, setStatus] = useState<SyncEngineStatus>({
+    isOnline: true,
+    isSyncing: false,
+    lastSyncedAt: null,
+    pendingChangesCount: 0,
+    conflictCount: 0,
+    mode: 'simulator',
+  });
+
+  const [conflicts, setConflicts] = useState<SyncQueueItem[]>([]);
+  const [syncLogs, setSyncLogs] = useState<SyncLog[]>([]);
+  const [supabaseUrl, setSupabaseUrl] = useState(
+    localStorage.getItem('winrah_supabase_url') || ''
+  );
+  const [supabaseKey, setSupabaseKey] = useState(
+    localStorage.getItem('winrah_supabase_key') || ''
+  );
+  const [isSavedSupabase, setIsSavedSupabase] = useState(false);
+
+  useEffect(() => {
+    loadData();
+    return syncEngine.subscribe(setStatus);
+  }, []);
+
+  const loadData = async () => {
+    const q = await db.getAll<SyncQueueItem>('sync_queue');
+    setConflicts(q.filter((c) => c.status === 'pending'));
+
+    const logs = await db.getAll<SyncLog>('sync_logs');
+    setSyncLogs(logs.sort((a, b) => new Date(b.started_at).getTime() - new Date(a.started_at).getTime()));
+  };
+
+  const handleSyncNow = async () => {
+    await syncEngine.syncNow();
+    await loadData();
+    onRefreshData();
+    confetti({ particleCount: 30, spread: 50 });
+  };
+
+  const handleSimulateConflict = async () => {
+    await syncEngine.injectSimulatedConflict();
+    await loadData();
+    onRefreshData();
+  };
+
+  const handleResolveConflict = async (
+    conflictId: string,
+    resolution: 'accept_device' | 'accept_server'
+  ) => {
+    await syncEngine.resolveConflict(conflictId, resolution);
+    await loadData();
+    onRefreshData();
+    confetti({ particleCount: 40, spread: 60 });
+  };
+
+  const handleSaveSupabaseConfig = (e: React.FormEvent) => {
+    e.preventDefault();
+    localStorage.setItem('winrah_supabase_url', supabaseUrl.trim());
+    localStorage.setItem('winrah_supabase_key', supabaseKey.trim());
+    setIsSavedSupabase(true);
+    setTimeout(() => setIsSavedSupabase(false), 2500);
+  };
+
+  return (
+    <div className="fade-in">
+      {/* Top Sync Hero Card */}
+      <div
+        className="glass-panel"
+        style={{
+          padding: '1.25rem',
+          marginBottom: '1.25rem',
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          flexWrap: 'wrap',
+          gap: '1rem',
+        }}
+      >
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.85rem' }}>
+          <div
+            style={{
+              width: '46px',
+              height: '46px',
+              borderRadius: 'var(--radius-md)',
+              background: status.isOnline
+                ? 'linear-gradient(135deg, #10b981 0%, #059669 100%)'
+                : 'linear-gradient(135deg, #f43f5e 0%, #e11d48 100%)',
+              color: 'white',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              boxShadow: status.isOnline
+                ? '0 4px 14px rgba(16, 185, 129, 0.3)'
+                : '0 4px 14px rgba(244, 63, 94, 0.3)',
+            }}
+          >
+            <Database size={24} />
+          </div>
+
+          <div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+              <h2 style={{ fontSize: '1.15rem', fontWeight: 800 }}>
+                {status.isOnline ? 'Prêt à synchroniser' : 'Mode Hors-ligne actif'}
+              </h2>
+              <span className={`badge ${status.isOnline ? 'badge-emerald' : 'badge-rose'}`}>
+                {status.isOnline ? 'Connecté' : 'Déconnecté'}
+              </span>
+            </div>
+
+            <p style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>
+              Dernière synchro :{' '}
+              {status.lastSyncedAt
+                ? new Date(status.lastSyncedAt).toLocaleString()
+                : 'Jamais'}
+            </p>
+          </div>
+        </div>
+
+        {/* Action Buttons: Sync Now & Device-to-Device QR */}
+        <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
+          <button
+            type="button"
+            onClick={onOpenDevicePairing}
+            className="btn btn-indigo"
+            style={{ gap: '0.45rem', fontSize: '0.85rem' }}
+            title="Échanger des données directement entre deux téléphones sans réseau (FR-7.4)"
+          >
+            <QrCode size={16} />
+            <span>Échange QR Direct (FR-7.4)</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={handleSyncNow}
+            disabled={status.isSyncing || !status.isOnline}
+            className="btn btn-primary"
+            style={{ gap: '0.45rem', fontSize: '0.85rem' }}
+          >
+            <RefreshCw size={16} className={status.isSyncing ? 'animate-spin' : ''} />
+            <span>{status.isSyncing ? 'Synchronisation...' : 'Synchroniser maintenant'}</span>
+          </button>
+        </div>
+      </div>
+
+      {/* Conflict Resolution Center (FR-7.6) */}
+      {conflicts.length > 0 ? (
+        <div
+          className="glass-panel fade-in"
+          style={{
+            padding: '1.25rem',
+            marginBottom: '1.5rem',
+            border: '1px solid var(--rose)',
+            background: 'rgba(244, 63, 94, 0.08)',
+          }}
+        >
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '1rem' }}>
+            <AlertTriangle size={20} style={{ color: '#fb7185' }} />
+            <div>
+              <h3 style={{ fontSize: '1.05rem', fontWeight: 800, color: '#fb7185' }}>
+                Conflits de synchronisation détectés ({conflicts.length})
+              </h3>
+              <p style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>
+                Deux appareils ont modifié la même fiche. Choisissez quelle version conserver (FR-7.6).
+              </p>
+            </div>
+          </div>
+
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.85rem' }}>
+            {conflicts.map((c) => (
+              <div
+                key={c.id}
+                style={{
+                  background: 'rgba(9, 13, 22, 0.7)',
+                  border: '1px solid var(--border-subtle)',
+                  borderRadius: 'var(--radius-md)',
+                  padding: '1rem',
+                }}
+              >
+                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.75rem' }}>
+                  <span className="ref-code" style={{ fontSize: '1rem' }}>
+                    {c.payload.reference_code || c.entity_type}
+                  </span>
+                  <span className="badge badge-rose" style={{ fontSize: '0.72rem' }}>
+                    Conflit Version (Serveur: v{c.server_version} vs Appareil: v{c.device_version})
+                  </span>
+                </div>
+
+                <div
+                  style={{
+                    display: 'grid',
+                    gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
+                    gap: '0.75rem',
+                    marginBottom: '1rem',
+                    fontSize: '0.8rem',
+                  }}
+                >
+                  {/* Device Version Card */}
+                  <div
+                    style={{
+                      background: 'rgba(245, 158, 11, 0.08)',
+                      border: '1px solid rgba(245, 158, 11, 0.25)',
+                      borderRadius: 'var(--radius-sm)',
+                      padding: '0.75rem',
+                    }}
+                  >
+                    <div style={{ fontWeight: 800, color: '#fbbf24', marginBottom: '0.35rem' }}>
+                      Version de cet appareil
+                    </div>
+                    <div>Nom : {c.payload.name || 'N/A'}</div>
+                    <div>Prix : {c.payload.price ? `${c.payload.price} DH` : 'N/A'}</div>
+                    <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', marginTop: '0.35rem' }}>
+                      Modifié hors-ligne
+                    </div>
+                  </div>
+
+                  {/* Server Version Card */}
+                  <div
+                    style={{
+                      background: 'rgba(99, 102, 241, 0.08)',
+                      border: '1px solid rgba(99, 102, 241, 0.25)',
+                      borderRadius: 'var(--radius-sm)',
+                      padding: '0.75rem',
+                    }}
+                  >
+                    <div style={{ fontWeight: 800, color: '#818cf8', marginBottom: '0.35rem' }}>
+                      Version du Serveur Central
+                    </div>
+                    <div>Enregistrement actif sur le serveur</div>
+                    <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', marginTop: '0.35rem' }}>
+                      Modifié par un autre opérateur
+                    </div>
+                  </div>
+                </div>
+
+                {/* Conflict Resolution Buttons */}
+                <div style={{ display: 'flex', gap: '0.5rem', justifyContent: 'flex-end' }}>
+                  <button
+                    type="button"
+                    onClick={() => handleResolveConflict(c.id, 'accept_device')}
+                    className="btn btn-primary"
+                    style={{ padding: '0.45rem 0.9rem', fontSize: '0.8rem' }}
+                  >
+                    Conserver version appareil
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => handleResolveConflict(c.id, 'accept_server')}
+                    className="btn btn-secondary"
+                    style={{ padding: '0.45rem 0.9rem', fontSize: '0.8rem' }}
+                  >
+                    Conserver version serveur
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      ) : (
+        /* Test Tool: Conflict Simulator Button */
+        <div
+          className="glass-panel"
+          style={{
+            padding: '1rem 1.25rem',
+            marginBottom: '1.25rem',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            flexWrap: 'wrap',
+            gap: '0.75rem',
+            background: 'rgba(245, 158, 11, 0.05)',
+            border: '1px dashed var(--primary)',
+          }}
+        >
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem' }}>
+            <Sparkles size={18} style={{ color: '#fbbf24' }} />
+            <div>
+              <div style={{ fontWeight: 700, fontSize: '0.88rem' }}>
+                Test local : Simuler un conflit hors-ligne (FR-7.6)
+              </div>
+              <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
+                Génère instantanément un conflit simulé pour tester l'écran de résolution manuelle
+              </div>
+            </div>
+          </div>
+
+          <button
+            type="button"
+            onClick={handleSimulateConflict}
+            className="btn btn-secondary"
+            style={{ padding: '0.4rem 0.85rem', fontSize: '0.8rem' }}
+          >
+            Créer un conflit test
+          </button>
+        </div>
+      )}
+
+      {/* Supabase Live Configuration (TDD §6) */}
+      <div className="glass-panel" style={{ padding: '1.25rem', marginBottom: '1.5rem' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '1rem' }}>
+          <Settings size={18} style={{ color: 'var(--primary)' }} />
+          <h3 style={{ fontSize: '1rem', fontWeight: 800 }}>
+            Connexion Supabase PostgreSQL (Optionnel)
+          </h3>
+        </div>
+
+        <p style={{ fontSize: '0.78rem', color: 'var(--text-muted)', marginBottom: '1rem' }}>
+          Par défaut, WINRAH fonctionne à 100% en local hors-ligne avec IndexedDB. Si vous possédez un
+          projet Supabase, collez l’URL et la clé anonyme pour synchroniser avec le cloud (Migrations SQL dans{' '}
+          <code style={{ color: '#fbbf24' }}>/supabase/migrations/</code>).
+        </p>
+
+        <form onSubmit={handleSaveSupabaseConfig} style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+          <div>
+            <label style={{ display: 'block', fontSize: '0.78rem', fontWeight: 700, marginBottom: '0.25rem' }}>
+              Project URL :
+            </label>
+            <input
+              type="text"
+              className="input-control"
+              placeholder="https://xyzcompany.supabase.co"
+              value={supabaseUrl}
+              onChange={(e) => setSupabaseUrl(e.target.value)}
+            />
+          </div>
+
+          <div>
+            <label style={{ display: 'block', fontSize: '0.78rem', fontWeight: 700, marginBottom: '0.25rem' }}>
+              Anon / Public API Key :
+            </label>
+            <input
+              type="password"
+              className="input-control"
+              placeholder="eyJh..."
+              value={supabaseKey}
+              onChange={(e) => setSupabaseKey(e.target.value)}
+            />
+          </div>
+
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginTop: '0.25rem' }}>
+            <button type="submit" className="btn btn-primary" style={{ padding: '0.5rem 1rem' }}>
+              Enregistrer configuration
+            </button>
+            {isSavedSupabase && (
+              <span style={{ fontSize: '0.8rem', color: '#34d399', fontWeight: 700 }}>
+                ✓ Enregistré !
+              </span>
+            )}
+          </div>
+        </form>
+      </div>
+
+      {/* Sync Audit History */}
+      <div className="glass-panel" style={{ padding: '1.25rem' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '1rem' }}>
+          <Clock size={18} style={{ color: 'var(--primary)' }} />
+          <h3 style={{ fontSize: '1rem', fontWeight: 800 }}>Historique des synchronisations</h3>
+        </div>
+
+        {syncLogs.length === 0 ? (
+          <p style={{ color: 'var(--text-muted)', fontSize: '0.85rem' }}>
+            Aucune session de synchronisation enregistrée.
+          </p>
+        ) : (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+            {syncLogs.slice(0, 8).map((log) => (
+              <div
+                key={log.id}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  padding: '0.65rem 0.85rem',
+                  background: 'rgba(9, 13, 22, 0.5)',
+                  border: '1px solid var(--border-subtle)',
+                  borderRadius: 'var(--radius-md)',
+                  fontSize: '0.8rem',
+                }}
+              >
+                <div>
+                  <span style={{ fontWeight: 700, color: '#fbbf24', marginRight: '0.5rem' }}>
+                    {log.direction === 'device_to_device'
+                      ? '📱 Échange Direct Pair-à-Pair'
+                      : '☁️ Synchro Serveur'}
+                  </span>
+                  <span style={{ color: 'var(--text-secondary)' }}>
+                    {log.records_pushed} poussés, {log.records_pulled} tirés, {log.conflicts} conflits
+                  </span>
+                </div>
+                <span style={{ color: 'var(--text-muted)', fontSize: '0.72rem' }}>
+                  {new Date(log.started_at).toLocaleString()}
+                </span>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+};
