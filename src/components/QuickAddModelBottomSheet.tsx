@@ -56,7 +56,7 @@ export const QuickAddModelBottomSheet: React.FC<QuickAddModelBottomSheetProps> =
   const [referenceCode, setReferenceCode] = useState(initialReference);
   const [name, setName] = useState('');
   const [sectionId, setSectionId] = useState('');
-  const [sizeRange, setSizeRange] = useState('36/41');
+  const [sizeRange, setSizeRange] = useState('');
   const [price, setPrice] = useState('');
   const [isBatchMode, setIsBatchMode] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
@@ -162,6 +162,7 @@ export const QuickAddModelBottomSheet: React.FC<QuickAddModelBottomSheetProps> =
         setReferenceCode('');
         setName('');
         setPrice('');
+        setSizeRange('');
         setSectionId('');
         onClose();
       }
@@ -400,7 +401,7 @@ export const QuickAddModelBottomSheet: React.FC<QuickAddModelBottomSheetProps> =
                   <button
                     key={preset.label}
                     type="button"
-                    onClick={() => setSizeRange(preset.label)}
+                    onClick={() => setSizeRange(isSelected ? '' : preset.label)}
                     style={{
                       padding: '0.3rem 0.65rem',
                       borderRadius: 'var(--radius-full)',
@@ -425,7 +426,7 @@ export const QuickAddModelBottomSheet: React.FC<QuickAddModelBottomSheetProps> =
             <input
               type="text"
               className="input-control"
-              placeholder="Ou saisie libre (ex: 38/43)..."
+              placeholder="Sélectionnez une pointure ci-dessus ou saisie libre (ex: 38/43)..."
               value={sizeRange}
               onChange={(e) => setSizeRange(e.target.value)}
               style={{ fontSize: '0.85rem', height: '40px' }}

@@ -28,7 +28,8 @@ import { DevicePairingModal } from './components/DevicePairingModal';
 import { QuickAddModelBottomSheet } from './components/QuickAddModelBottomSheet';
 
 import { db } from './db/indexedDb';
-import { seedDemoData } from './db/seedData';
+import { initBaseWarehouse } from './db/seedData';
+import { syncEngine } from './lib/syncEngine';
 import {
   Warehouse,
   Area,
@@ -85,6 +86,20 @@ export function App() {
   const refreshData = useCallback(async () => {
     if (isSeedingRef.current) return;
     await db.init();
+
+    // One-time purge of previous local DB content to ensure clean BASE warehouse
+    const DB_RESET_KEY = 'winrah_reset_clean_base_v3';
+    if (!localStorage.getItem(DB_RESET_KEY)) {
+      localStorage.setItem(DB_RESET_KEY, 'true');
+      isSeedingRef.current = true;
+      try {
+        await initBaseWarehouse();
+      } finally {
+        isSeedingRef.current = false;
+      }
+      return;
+    }
+
     const [w, a, s, m, ms, t, sl, al] = await Promise.all([
       db.getAll<Warehouse>('warehouses'),
       db.getAll<Area>('areas'),
@@ -96,26 +111,15 @@ export function App() {
       db.getAll<AuditLog>('audit_logs'),
     ]);
 
-    // If empty on first launch, auto-seed with realistic Moroccan sample data
+    // If empty on first launch/login, auto-create the BASE warehouse
     if (w.length === 0 && !isSeedingRef.current) {
       isSeedingRef.current = true;
       try {
-        await seedDemoData();
+        await initBaseWarehouse();
       } finally {
         isSeedingRef.current = false;
       }
       return;
-    }
-
-    // Ensure Algerian localization for warehouses
-    for (const wh of w) {
-      if (wh.name.includes('Casablanca')) {
-        wh.name = wh.name.replace('Casablanca - Aïn Sebaâ', 'Alger - Oued Smar').replace('Casablanca', 'Alger');
-        db.putRaw('warehouses', wh, false);
-      } else if (wh.name.includes('Tanger')) {
-        wh.name = wh.name.replace('Tanger Med Logistique', 'Oran - Es Sénia').replace('Tanger', 'Oran');
-        db.putRaw('warehouses', wh, false);
-      }
     }
 
     setWarehouses(w);
@@ -154,14 +158,31 @@ export function App() {
     setTransferFromSectionId(fromSecId);
   };
 
-  const handleBarcodeScanned = (code: string) => {
+  const handleBarcodeScanned = async (code: string) => {
     if (scannerTargetCallback) {
       scannerTargetCallback(code);
       setScannerTargetCallback(null);
-    } else {
-      setSearchQuery(code);
-      setActiveTab('search');
+      return;
     }
+
+    const trimmed = code.trim();
+    // Check if scanned QR code contains peer database / changeset transfer
+    if (trimmed.startsWith('{') && (trimmed.includes('"tables"') || trimmed.includes('"from_device_id"'))) {
+      try {
+        const parsed = JSON.parse(trimmed);
+        if (parsed.tables) {
+          const res = await syncEngine.importChangeset(parsed);
+          alert(`Transfert QR Code réussi ! La base locale et les entrepôts ont été réinitialisés avec ${res.imported} enregistrements.`);
+          refreshData();
+          return;
+        }
+      } catch (err) {
+        console.warn('Scanned QR code JSON parse failed:', err);
+      }
+    }
+
+    setSearchQuery(code);
+    setActiveTab('search');
   };
 
   // Intercept Android hardware Back Button to gracefully close modals and navigate without white-screening
@@ -424,6 +445,10 @@ export function App() {
         isOpen={isPairingModalOpen}
         onSuccess={refreshData}
         onClose={() => setIsPairingModalOpen(false)}
+        onOpenScanner={() => {
+          setIsPairingModalOpen(false);
+          setIsBarcodeModalOpen(true);
+        }}
       />
 
       {/* Quick Add Model BottomSheet */}

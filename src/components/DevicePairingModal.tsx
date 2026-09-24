@@ -1,20 +1,20 @@
 // ============================================================================
-// WINRAH - Device-to-Device Offline Pairing Modal (FR-7.4, TDD §8)
-// Facilitates direct data exchange between two phones with zero network
-// via a pairing QR code and portable JSON changeset format.
+// WINRAH - Device Pairing & Offline Data Transfer Modal (FR-7.4)
+// Allows direct peer-to-peer data export/import via QR code and JSON
+// Completely wipes existing DB and hubs before applying incoming data
 // ============================================================================
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   QrCode,
-  X,
-  Share2,
   Download,
   Upload,
-  CheckCircle2,
   Copy,
   Check,
-  AlertCircle,
+  X,
+  Camera,
+  AlertTriangle,
+  FileCode,
 } from 'lucide-react';
 import QRCode from 'qrcode';
 import { syncEngine } from '../lib/syncEngine';
@@ -26,26 +26,29 @@ interface DevicePairingModalProps {
   isOpen: boolean;
   onSuccess: () => void;
   onClose: () => void;
+  onOpenScanner?: () => void;
 }
 
 export const DevicePairingModal: React.FC<DevicePairingModalProps> = ({
   isOpen,
   onSuccess,
   onClose,
+  onOpenScanner,
 }) => {
   const [activeTab, setActiveTab] = useState<'send' | 'receive'>('send');
   const [qrDataUrl, setQrDataUrl] = useState<string>('');
   const [changesetJson, setChangesetJson] = useState<string>('');
+  const [isQrFullData, setIsQrFullData] = useState<boolean>(false);
   const [importJsonText, setImportJsonText] = useState<string>('');
   const [isCopied, setIsCopied] = useState(false);
   const [importStatus, setImportStatus] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   useEffect(() => {
     if (!isOpen) return;
 
-    // Generate pairing payload (TDD §8.2)
     const deviceId = localStorage.getItem('winrah_device_id') || 'dev-local-01';
-    const payload: PairingQrPayload = {
+    const fallbackPayload: PairingQrPayload = {
       type: 'sw_pair',
       device_id: deviceId,
       device_name: 'Appareil Entrepôt',
@@ -54,21 +57,26 @@ export const DevicePairingModal: React.FC<DevicePairingModalProps> = ({
       protocol_version: 1,
     };
 
-    // Render QR Code Data URL
-    QRCode.toDataURL(JSON.stringify(payload), {
-      width: 260,
-      margin: 2,
-      color: {
-        dark: '#000000',
-        light: '#ffffff',
-      },
-    })
-      .then(setQrDataUrl)
-      .catch(console.error);
-
     // Export Changeset ready for sharing
     syncEngine.exportChangeset().then((cs) => {
+      const compactJson = JSON.stringify(cs);
       setChangesetJson(JSON.stringify(cs, null, 2));
+
+      // If changeset is compact enough (< 2200 chars), put complete data directly in QR Code!
+      const canFitInQr = compactJson.length < 2200;
+      setIsQrFullData(canFitInQr);
+
+      const qrContent = canFitInQr ? compactJson : JSON.stringify(fallbackPayload);
+      QRCode.toDataURL(qrContent, {
+        width: 260,
+        margin: 2,
+        color: {
+          dark: '#000000',
+          light: '#ffffff',
+        },
+      })
+        .then(setQrDataUrl)
+        .catch(console.error);
     });
   }, [isOpen]);
 
@@ -83,26 +91,45 @@ export const DevicePairingModal: React.FC<DevicePairingModalProps> = ({
   const handleDownloadChangeset = () => {
     downloadBlob(
       changesetJson,
-      `winrah_changeset_${Date.now()}.json`,
+      `winrah_export_${Date.now()}.json`,
       'application/json'
     );
   };
 
-  const handleImport = async () => {
+  const executeImport = async (jsonString: string) => {
     try {
       setImportStatus(null);
-      const parsed: DeviceChangeset = JSON.parse(importJsonText);
+      const parsed: DeviceChangeset = JSON.parse(jsonString);
       if (!parsed.tables) {
-        throw new Error('Format de changeset invalide (clé "tables" absente).');
+        throw new Error('Format de données invalide (clé "tables" absente).');
       }
 
       const res = await syncEngine.importChangeset(parsed);
-      setImportStatus(`Succès : ${res.imported} enregistrements intégrés !`);
+      setImportStatus(`Succès : Anciennes données et hubs supprimés. ${res.imported} enregistrements intégrés !`);
       confetti({ particleCount: 50, spread: 60 });
       onSuccess();
     } catch (err: any) {
       setImportStatus(`Erreur d'import : ${err.message}`);
     }
+  };
+
+  const handleManualImport = async () => {
+    await executeImport(importJsonText);
+  };
+
+  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (evt) => {
+      const content = evt.target?.result as string;
+      if (content) {
+        setImportJsonText(content);
+        executeImport(content);
+      }
+    };
+    reader.readAsText(file);
+    e.target.value = '';
   };
 
   return (
@@ -124,7 +151,7 @@ export const DevicePairingModal: React.FC<DevicePairingModalProps> = ({
         className="card fade-in"
         style={{
           width: '100%',
-          maxWidth: '500px',
+          maxWidth: '520px',
           maxHeight: '90vh',
           overflowY: 'auto',
           background: '#FFFFFF',
@@ -169,10 +196,10 @@ export const DevicePairingModal: React.FC<DevicePairingModalProps> = ({
           </div>
           <div>
             <h2 style={{ fontSize: '1.15rem', fontWeight: 800 }}>
-              Échange Direct Appareil-à-Appareil (FR-7.4)
+              Transfert Données Appareil-à-Appareil
             </h2>
             <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
-              Permet de partager les modifications sans aucun réseau internet
+              Partager ou recevoir des données sans connexion internet
             </p>
           </div>
         </div>
@@ -200,10 +227,41 @@ export const DevicePairingModal: React.FC<DevicePairingModalProps> = ({
         {/* Mode 1: Send / Share Changeset */}
         {activeTab === 'send' && (
           <div className="fade-in" style={{ textAlign: 'center' }}>
-            <p style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', marginBottom: '1rem' }}>
-              Faites scanner ce QR Code d'appairage par l'autre téléphone pour établir la liaison locale,
-              ou exportez le fichier de synchronisation.
+            <p style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', marginBottom: '0.75rem' }}>
+              Faites scanner ce QR Code par l'autre appareil, ou transférez le fichier JSON.
             </p>
+
+            {isQrFullData ? (
+              <div
+                style={{
+                  display: 'inline-block',
+                  fontSize: '0.75rem',
+                  padding: '0.25rem 0.6rem',
+                  borderRadius: 'var(--radius-full)',
+                  background: 'rgba(16, 185, 129, 0.12)',
+                  color: '#059669',
+                  fontWeight: 700,
+                  marginBottom: '0.75rem',
+                }}
+              >
+                ✓ Données complètes encodées dans le QR Code
+              </div>
+            ) : (
+              <div
+                style={{
+                  display: 'inline-block',
+                  fontSize: '0.75rem',
+                  padding: '0.25rem 0.6rem',
+                  borderRadius: 'var(--radius-full)',
+                  background: 'rgba(245, 158, 11, 0.12)',
+                  color: '#b45309',
+                  fontWeight: 600,
+                  marginBottom: '0.75rem',
+                }}
+              >
+                Volume important : téléchargez le fichier JSON ci-dessous
+              </div>
+            )}
 
             {/* QR Code Container */}
             {qrDataUrl ? (
@@ -213,13 +271,13 @@ export const DevicePairingModal: React.FC<DevicePairingModalProps> = ({
                   padding: '12px',
                   background: '#ffffff',
                   borderRadius: 'var(--radius-md)',
-                  boxShadow: '0 6px 20px rgba(0, 0, 0, 0.5)',
+                  boxShadow: '0 6px 20px rgba(0, 0, 0, 0.15)',
                   marginBottom: '1rem',
                 }}
               >
                 <img
                   src={qrDataUrl}
-                  alt="Pairing QR Code"
+                  alt="Transfer QR Code"
                   style={{ width: '220px', height: '220px', display: 'block' }}
                 />
               </div>
@@ -254,29 +312,87 @@ export const DevicePairingModal: React.FC<DevicePairingModalProps> = ({
         {/* Mode 2: Receive / Import Changeset */}
         {activeTab === 'receive' && (
           <div className="fade-in">
-            <p style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', marginBottom: '0.75rem' }}>
-              Collez le code de synchronisation reçu de l'autre appareil pour fusionner les modèles et
-              transferts sans passer par internet :
+            {/* Warning notice about complete wipe */}
+            <div
+              style={{
+                display: 'flex',
+                alignItems: 'flex-start',
+                gap: '0.5rem',
+                padding: '0.75rem',
+                borderRadius: 'var(--radius-md)',
+                background: 'rgba(239, 68, 68, 0.08)',
+                border: '1px solid rgba(239, 68, 68, 0.25)',
+                color: '#b91c1c',
+                fontSize: '0.78rem',
+                marginBottom: '1rem',
+              }}
+            >
+              <AlertTriangle size={18} style={{ flexShrink: 0, marginTop: '2px' }} />
+              <div>
+                <strong>Attention :</strong> L'importation supprime l'intégralité du contenu local actuel
+                (y compris tous les anciens entrepôts/hubs) pour charger les nouvelles données.
+              </div>
+            </div>
+
+            {/* Quick Actions: Scan Camera or Upload File */}
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.5rem', marginBottom: '1rem' }}>
+              {onOpenScanner && (
+                <button
+                  type="button"
+                  onClick={onOpenScanner}
+                  className="btn btn-primary"
+                  style={{ gap: '0.45rem', fontSize: '0.82rem', padding: '0.65rem' }}
+                >
+                  <Camera size={16} />
+                  <span>Scanner QR Code</span>
+                </button>
+              )}
+
+              <button
+                type="button"
+                onClick={() => fileInputRef.current?.click()}
+                className="btn btn-secondary"
+                style={{
+                  gap: '0.45rem',
+                  fontSize: '0.82rem',
+                  padding: '0.65rem',
+                  gridColumn: onOpenScanner ? 'auto' : '1 / -1',
+                }}
+              >
+                <FileCode size={16} />
+                <span>Charger fichier JSON</span>
+              </button>
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept=".json,application/json"
+                style={{ display: 'none' }}
+                onChange={handleFileUpload}
+              />
+            </div>
+
+            <p style={{ fontSize: '0.78rem', color: 'var(--text-secondary)', marginBottom: '0.5rem' }}>
+              Ou collez directement le JSON ici :
             </p>
 
             <textarea
-              rows={8}
+              rows={6}
               className="input-control"
-              style={{ fontFamily: 'var(--font-mono)', fontSize: '0.78rem', marginBottom: '1rem' }}
-              placeholder='Collez le JSON du changeset ici {"tables": ...}'
+              style={{ fontFamily: 'var(--font-mono)', fontSize: '0.78rem', marginBottom: '0.75rem' }}
+              placeholder='Collez le JSON ici {"tables": ...}'
               value={importJsonText}
               onChange={(e) => setImportJsonText(e.target.value)}
             />
 
             <button
               type="button"
-              onClick={handleImport}
+              onClick={handleManualImport}
               disabled={!importJsonText.trim()}
               className="btn btn-indigo"
               style={{ width: '100%', gap: '0.5rem' }}
             >
               <Upload size={18} />
-              <span>Fusionner les modifications dans la base locale</span>
+              <span>Écraser la base et importer les données</span>
             </button>
 
             {importStatus && (
@@ -288,7 +404,7 @@ export const DevicePairingModal: React.FC<DevicePairingModalProps> = ({
                   background: importStatus.startsWith('Succès')
                     ? 'rgba(16, 185, 129, 0.15)'
                     : 'rgba(244, 63, 94, 0.15)',
-                  color: importStatus.startsWith('Succès') ? '#34d399' : '#fb7185',
+                  color: importStatus.startsWith('Succès') ? '#059669' : '#e11d48',
                   fontSize: '0.82rem',
                   fontWeight: 700,
                 }}

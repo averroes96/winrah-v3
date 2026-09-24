@@ -255,12 +255,53 @@ class SyncEngine {
 
   // Import peer device changeset (FR-7.4)
   async importChangeset(changeset: DeviceChangeset): Promise<{ imported: number }> {
+    // 1. Wipe everything first (including all previous hubs/warehouses)
+    await db.clearAll();
+
+    const now = new Date().toISOString();
     let imported = 0;
 
-    for (const w of changeset.tables.warehouses || []) {
-      await db.putRaw('warehouses', { ...w, is_dirty: false, local_sync_status: 'synced' });
+    // 2. Warehouses: if incoming changeset includes warehouses, import them; otherwise ensure auto BASE warehouse
+    const incomingWarehouses = changeset.tables.warehouses || [];
+    let activeWarehouseId = 'wh-base';
+
+    if (incomingWarehouses.length > 0) {
+      for (const w of incomingWarehouses) {
+        await db.putRaw('warehouses', { ...w, is_dirty: false, local_sync_status: 'synced' });
+        imported++;
+      }
+      activeWarehouseId = incomingWarehouses[0].id;
+    } else {
+      const baseWh = {
+        id: 'wh-base',
+        name: 'BASE',
+        status: 'active' as const,
+        created_at: now,
+        updated_at: now,
+        version: 1,
+        is_dirty: false,
+        local_sync_status: 'synced' as const,
+      };
+      await db.bulkPut('warehouses', [baseWh]);
       imported++;
     }
+
+    localStorage.setItem('winrah_active_warehouse_id', activeWarehouseId);
+
+    // Ensure default device exists
+    await db.bulkPut('devices', [
+      {
+        id: 'dev-local-01',
+        name: 'Terminal Mobile',
+        platform: 'web',
+        active_warehouse_id: activeWarehouseId,
+        created_at: now,
+        updated_at: now,
+        version: 1,
+        last_synced_at: now,
+      },
+    ]);
+
     for (const a of changeset.tables.areas || []) {
       await db.putRaw('areas', { ...a, is_dirty: false, local_sync_status: 'synced' });
       imported++;
@@ -285,16 +326,17 @@ class SyncEngine {
     // Record sync log
     await db.putRaw('sync_logs', {
       id: 'd2d-' + Date.now(),
-      device_id: changeset.from_device_id,
+      device_id: changeset.from_device_id || 'peer-device',
       direction: 'device_to_device',
       records_pushed: 0,
       records_pulled: imported,
       conflicts: 0,
-      started_at: new Date().toISOString(),
-      completed_at: new Date().toISOString(),
+      started_at: now,
+      completed_at: now,
     });
 
     this.notify();
+    db.notify();
     return { imported };
   }
 }

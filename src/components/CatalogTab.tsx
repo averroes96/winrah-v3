@@ -106,7 +106,7 @@ export const CatalogTab: React.FC<CatalogTabProps> = ({
   const [isAddModelOpen, setIsAddModelOpen] = useState(false);
   const [newModelRef, setNewModelRef] = useState('');
   const [newModelName, setNewModelName] = useState('');
-  const [newModelSize, setNewModelSize] = useState('36/41');
+  const [newModelSize, setNewModelSize] = useState('');
   const [newModelPrice, setNewModelPrice] = useState('');
   const [newModelSectionId, setNewModelSectionId] = useState('');
   const [modelSearchQuery, setModelSearchQuery] = useState('');
@@ -316,6 +316,7 @@ export const CatalogTab: React.FC<CatalogTabProps> = ({
 
     setNewModelRef('');
     setNewModelName('');
+    setNewModelSize('');
     setNewModelPrice('');
     setIsAddModelOpen(false);
 
@@ -385,38 +386,21 @@ export const CatalogTab: React.FC<CatalogTabProps> = ({
 
   // Commit valid CSV rows (Ultra-fast bulk import for both V2 and V3)
   const handleCommitCsv = async () => {
-    const effectiveWarehouseId = targetWarehouseIdForImport || activeWarehouse?.id || warehouses[0]?.id;
-    if (!effectiveWarehouseId) {
-      setCsvValidationErrors([{ line: 1, message: 'Please select a destination warehouse.' }]);
-      return;
-    }
-
     setIsImporting(true);
     try {
       if (detectedFormat === 'v2' && parsedV2Data && parsedV2Data.products.length > 0) {
-        const result = await importV2DatabaseToDb(
-          parsedV2Data,
-          effectiveWarehouseId,
-          areas,
-          sections
-        );
-        const whName = warehouses.find((w) => w.id === effectiveWarehouseId)?.name || 'Selected Warehouse';
+        const result = await importV2DatabaseToDb(parsedV2Data);
         setImportSuccessMessage(
-          `Successfully imported ${result.modelsCreated.toLocaleString()} models and ${result.sectionsCreated} sections across ${result.areasCreated} zones into "${whName}"!`
+          `Base réinitialisée avec succès ! ${result.modelsCreated.toLocaleString()} modèles et ${result.sectionsCreated} sections importés dans l'entrepôt BASE.`
         );
         setCsvContent('');
         setParsedV2Data(null);
         setDetectedFormat('unknown');
         onRefreshData();
       } else if (detectedFormat === 'v3' && parsedRows.length > 0) {
-        const result = await importStandardCsvToDb(
-          parsedRows,
-          effectiveWarehouseId,
-          sections
-        );
-        const whName = warehouses.find((w) => w.id === effectiveWarehouseId)?.name || 'Selected Warehouse';
+        const result = await importStandardCsvToDb(parsedRows);
         setImportSuccessMessage(
-          `Successfully imported ${result.modelsCreated.toLocaleString()} models into "${whName}"!`
+          `Base réinitialisée avec succès ! ${result.modelsCreated.toLocaleString()} modèles importés dans l'entrepôt BASE.`
         );
         setCsvContent('');
         setParsedRows([]);
@@ -1125,25 +1109,28 @@ export const CatalogTab: React.FC<CatalogTabProps> = ({
           >
             <div>
               <label style={{ fontSize: '0.78rem', fontWeight: 700, display: 'block', color: 'var(--text-primary)' }}>
-                Target Warehouse Destination:
+                Entrepôt de destination :
               </label>
               <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>
-                Imported items and sections will be assigned to this warehouse.
+                L'importation réinitialise la base locale et associe l'ensemble des données à l'entrepôt <strong>BASE</strong>.
               </span>
             </div>
 
-            <select
-              value={targetWarehouseIdForImport || activeWarehouse?.id || warehouses[0]?.id || ''}
-              onChange={(e) => setTargetWarehouseIdForImport(e.target.value)}
-              className="input-control"
-              style={{ width: 'auto', minWidth: '220px', padding: '0.4rem 0.65rem', fontSize: '0.82rem' }}
+            <div
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '0.4rem',
+                padding: '0.35rem 0.75rem',
+                borderRadius: 'var(--radius-full)',
+                background: 'rgba(99, 102, 241, 0.1)',
+                color: '#4f46e5',
+                fontWeight: 700,
+                fontSize: '0.8rem',
+              }}
             >
-              {warehouses.map((w) => (
-                <option key={w.id} value={w.id}>
-                  {w.name} {w.id === activeWarehouse?.id ? '(Active)' : ''}
-                </option>
-              ))}
-            </select>
+              <span>BASE (Automatique)</span>
+            </div>
           </div>
 
           {/* Format Detection & Statistics Preview */}
@@ -1674,7 +1661,7 @@ export const CatalogTab: React.FC<CatalogTabProps> = ({
                   <input
                     type="text"
                     className="input-control"
-                    placeholder="36/41"
+                    placeholder="Ex: 36/41, 40/45..."
                     value={newModelSize}
                     onChange={(e) => setNewModelSize(e.target.value)}
                   />

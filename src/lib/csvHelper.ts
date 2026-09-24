@@ -167,88 +167,121 @@ export function parseV2DatabaseCsv(csvText: string): V2ParsedDatabase {
 
 export async function importV2DatabaseToDb(
   v2Data: V2ParsedDatabase,
-  targetWarehouseId: string,
-  existingAreas: Area[],
-  existingSections: Section[]
+  targetWarehouseId: string = 'wh-base',
+  existingAreas: Area[] = [],
+  existingSections: Section[] = []
 ): Promise<{
   areasCreated: number;
   sectionsCreated: number;
   modelsCreated: number;
   assignmentsCreated: number;
 }> {
+  // 1. Wipe everything first (including all previous hubs/warehouses)
+  await db.clearAll();
+
   const now = new Date().toISOString();
+
+  // 2. Create the auto BASE warehouse
+  const baseWarehouse: Warehouse = {
+    id: 'wh-base',
+    name: 'BASE',
+    status: 'active',
+    created_at: now,
+    updated_at: now,
+    version: 1,
+    is_dirty: false,
+    local_sync_status: 'synced',
+  };
+  await db.bulkPut('warehouses', [baseWarehouse]);
+
+  // Ensure default device exists
+  await db.bulkPut('devices', [
+    {
+      id: 'dev-local-01',
+      name: 'Terminal Mobile',
+      platform: 'web',
+      active_warehouse_id: 'wh-base',
+      created_at: now,
+      updated_at: now,
+      version: 1,
+      last_synced_at: null,
+    },
+  ]);
+
+  localStorage.setItem('winrah_active_warehouse_id', 'wh-base');
+
   const areasToInsert: Area[] = [];
   const sectionsToInsert: Section[] = [];
   const modelsToInsert: ShoeModel[] = [];
   const modelSectionsToInsert: ModelSection[] = [];
 
-  // 1. Resolve Areas (Zone A, Zone B, etc.)
+  // 3. Resolve Areas under BASE
   const areaNameToId = new Map<string, string>();
-  for (const existingArea of existingAreas) {
-    if (existingArea.warehouse_id === targetWarehouseId && existingArea.status === 'active') {
-      areaNameToId.set(existingArea.name.toLowerCase(), existingArea.id);
-    }
-  }
-
   for (const zoneName of v2Data.summary.zones) {
-    if (!areaNameToId.has(zoneName.toLowerCase())) {
-      const newAreaId = `area-${targetWarehouseId}-${zoneName.replace(/\s+/g, '-').toLowerCase()}-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`;
+    const cleanZone = zoneName.trim() || 'Zone Principale';
+    if (!areaNameToId.has(cleanZone.toLowerCase())) {
+      const newAreaId = `area-base-${cleanZone.replace(/\s+/g, '-').toLowerCase()}-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`;
       const newArea: Area = {
         id: newAreaId,
-        warehouse_id: targetWarehouseId,
-        name: zoneName,
+        warehouse_id: 'wh-base',
+        name: cleanZone,
         status: 'active',
         created_at: now,
         updated_at: now,
         version: 1,
-        is_dirty: true,
-        local_sync_status: 'pending',
+        is_dirty: false,
+        local_sync_status: 'synced',
       };
       areasToInsert.push(newArea);
-      areaNameToId.set(zoneName.toLowerCase(), newAreaId);
+      areaNameToId.set(cleanZone.toLowerCase(), newAreaId);
     }
   }
 
-  // 2. Resolve Sections (A1..A11, b1..b30, etc.)
+  if (areasToInsert.length === 0) {
+    const fallbackArea: Area = {
+      id: `area-base-def-${Date.now()}`,
+      warehouse_id: 'wh-base',
+      name: 'Zone Principale',
+      status: 'active',
+      created_at: now,
+      updated_at: now,
+      version: 1,
+      is_dirty: false,
+      local_sync_status: 'synced',
+    };
+    areasToInsert.push(fallbackArea);
+    areaNameToId.set('zone principale', fallbackArea.id);
+  }
+
+  // 4. Resolve Sections under BASE areas
   const v2SectionIdToV3SectionId = new Map<number, string>();
-  const existingSectionMap = new Map<string, string>(); // `${areaId}:${normalizedName.toLowerCase()}` -> sectionId
-
-  for (const es of existingSections) {
-    existingSectionMap.set(`${es.area_id}:${es.name.toLowerCase()}`, es.id);
-  }
-
   for (const v2Sec of v2Data.sections) {
-    const areaId = areaNameToId.get(v2Sec.zoneName.toLowerCase())!;
-    const key = `${areaId}:${v2Sec.normalizedName.toLowerCase()}`;
+    const zoneKey = (v2Sec.zoneName || 'Zone Principale').toLowerCase();
+    const areaId = areaNameToId.get(zoneKey) || areasToInsert[0].id;
 
-    if (existingSectionMap.has(key)) {
-      v2SectionIdToV3SectionId.set(v2Sec.id, existingSectionMap.get(key)!);
-    } else {
-      const sectionId = `sec-v2-${v2Sec.id}-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`;
-      const newSection: Section = {
-        id: sectionId,
-        area_id: areaId,
-        name: v2Sec.normalizedName,
-        capacity: null,
-        status: 'active',
-        created_at: now,
-        updated_at: now,
-        version: 1,
-        is_dirty: true,
-        local_sync_status: 'pending',
-      };
-      sectionsToInsert.push(newSection);
-      existingSectionMap.set(key, sectionId);
-      v2SectionIdToV3SectionId.set(v2Sec.id, sectionId);
-    }
+    const sectionId = `sec-v2-${v2Sec.id}-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`;
+    const newSection: Section = {
+      id: sectionId,
+      area_id: areaId,
+      name: v2Sec.normalizedName,
+      capacity: null,
+      status: 'active',
+      created_at: now,
+      updated_at: now,
+      version: 1,
+      is_dirty: false,
+      local_sync_status: 'synced',
+    };
+    sectionsToInsert.push(newSection);
+    v2SectionIdToV3SectionId.set(v2Sec.id, sectionId);
   }
 
-  // 3. Create Models and ModelSection assignments
+  // 5. Create Models and ModelSection assignments
   for (const v2Prod of v2Data.products) {
     const modelId = `model-v2-${v2Prod.id}-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
     const model: ShoeModel = {
       id: modelId,
-      warehouse_id: targetWarehouseId,
+      warehouse_id: 'wh-base',
       reference_code: v2Prod.referenceCode,
       name: v2Prod.name || null,
       size_range: v2Prod.priceOrSize || null,
@@ -258,8 +291,8 @@ export async function importV2DatabaseToDb(
       created_at: now,
       updated_at: now,
       version: 1,
-      is_dirty: true,
-      local_sync_status: 'pending',
+      is_dirty: false,
+      local_sync_status: 'synced',
     };
     modelsToInsert.push(model);
 
@@ -272,14 +305,14 @@ export async function importV2DatabaseToDb(
         assigned_at: now,
         updated_at: now,
         version: 1,
-        is_dirty: true,
-        local_sync_status: 'pending',
+        is_dirty: false,
+        local_sync_status: 'synced',
       };
       modelSectionsToInsert.push(assignment);
     }
   }
 
-  // 4. Ultra-fast bulk IndexedDB insertion
+  // 6. Ultra-fast bulk IndexedDB insertion
   if (areasToInsert.length > 0) {
     await db.bulkPut('areas', areasToInsert);
   }
@@ -380,23 +413,105 @@ export function parseCsvText(csvText: string): CsvValidationResult {
 
 export async function importStandardCsvToDb(
   validRows: CsvImportRow[],
-  targetWarehouseId: string,
-  existingSections: Section[]
-): Promise<{ modelsCreated: number; assignmentsCreated: number }> {
+  targetWarehouseId: string = 'wh-base',
+  existingSections: Section[] = []
+): Promise<{
+  modelsCreated: number;
+  assignmentsCreated: number;
+  areasCreated: number;
+  sectionsCreated: number;
+}> {
+  // 1. Wipe everything first (including all previous hubs/warehouses)
+  await db.clearAll();
+
   const now = new Date().toISOString();
+
+  // 2. Create the auto BASE warehouse
+  const baseWarehouse: Warehouse = {
+    id: 'wh-base',
+    name: 'BASE',
+    status: 'active',
+    created_at: now,
+    updated_at: now,
+    version: 1,
+    is_dirty: false,
+    local_sync_status: 'synced',
+  };
+  await db.bulkPut('warehouses', [baseWarehouse]);
+
+  // Ensure default device exists
+  await db.bulkPut('devices', [
+    {
+      id: 'dev-local-01',
+      name: 'Terminal Mobile',
+      platform: 'web',
+      active_warehouse_id: 'wh-base',
+      created_at: now,
+      updated_at: now,
+      version: 1,
+      last_synced_at: null,
+    },
+  ]);
+
+  localStorage.setItem('winrah_active_warehouse_id', 'wh-base');
+
+  const areasToInsert: Area[] = [];
+  const sectionsToInsert: Section[] = [];
   const modelsToInsert: ShoeModel[] = [];
   const modelSectionsToInsert: ModelSection[] = [];
 
-  const sectionNameMap = new Map<string, string>();
-  for (const s of existingSections) {
-    sectionNameMap.set(s.name.toLowerCase(), s.id);
+  const areaMap = new Map<string, string>();
+  const sectionMap = new Map<string, string>();
+
+  // Extract unique areas and sections from CSV rows
+  for (const row of validRows) {
+    const areaName = (row.area_name || 'Zone Principale').trim();
+    if (!areaMap.has(areaName.toLowerCase())) {
+      const areaId = `area-base-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`;
+      const newArea: Area = {
+        id: areaId,
+        warehouse_id: 'wh-base',
+        name: areaName,
+        status: 'active',
+        created_at: now,
+        updated_at: now,
+        version: 1,
+        is_dirty: false,
+        local_sync_status: 'synced',
+      };
+      areasToInsert.push(newArea);
+      areaMap.set(areaName.toLowerCase(), areaId);
+    }
+
+    if (row.section_name && row.section_name.trim()) {
+      const secName = row.section_name.trim();
+      if (!sectionMap.has(secName.toLowerCase())) {
+        const parentAreaId = areaMap.get(areaName.toLowerCase())!;
+        const secId = `sec-base-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`;
+        const newSec: Section = {
+          id: secId,
+          area_id: parentAreaId,
+          name: secName,
+          capacity: null,
+          status: 'active',
+          created_at: now,
+          updated_at: now,
+          version: 1,
+          is_dirty: false,
+          local_sync_status: 'synced',
+        };
+        sectionsToInsert.push(newSec);
+        sectionMap.set(secName.toLowerCase(), secId);
+      }
+    }
   }
 
+  // Insert models and link sections
   for (const row of validRows) {
     const modelId = `model-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
     const model: ShoeModel = {
       id: modelId,
-      warehouse_id: targetWarehouseId,
+      warehouse_id: 'wh-base',
       reference_code: row.reference_code,
       name: row.name || null,
       size_range: row.size_range || null,
@@ -406,13 +521,13 @@ export async function importStandardCsvToDb(
       created_at: now,
       updated_at: now,
       version: 1,
-      is_dirty: true,
-      local_sync_status: 'pending',
+      is_dirty: false,
+      local_sync_status: 'synced',
     };
     modelsToInsert.push(model);
 
-    if (row.section_name) {
-      const secId = sectionNameMap.get(row.section_name.toLowerCase());
+    if (row.section_name && row.section_name.trim()) {
+      const secId = sectionMap.get(row.section_name.trim().toLowerCase());
       if (secId) {
         modelSectionsToInsert.push({
           id: `ms-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
@@ -421,13 +536,19 @@ export async function importStandardCsvToDb(
           assigned_at: now,
           updated_at: now,
           version: 1,
-          is_dirty: true,
-          local_sync_status: 'pending',
+          is_dirty: false,
+          local_sync_status: 'synced',
         });
       }
     }
   }
 
+  if (areasToInsert.length > 0) {
+    await db.bulkPut('areas', areasToInsert);
+  }
+  if (sectionsToInsert.length > 0) {
+    await db.bulkPut('sections', sectionsToInsert);
+  }
   if (modelsToInsert.length > 0) {
     await db.bulkPut('models', modelsToInsert);
   }
@@ -438,6 +559,8 @@ export async function importStandardCsvToDb(
   db.notify();
 
   return {
+    areasCreated: areasToInsert.length,
+    sectionsCreated: sectionsToInsert.length,
     modelsCreated: modelsToInsert.length,
     assignmentsCreated: modelSectionsToInsert.length,
   };
