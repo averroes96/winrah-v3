@@ -24,6 +24,12 @@ import { db } from '../db/indexedDb';
 import { SyncQueueItem, SyncLog } from '../types';
 
 
+import {
+  getAppwriteConfig,
+  saveAppwriteConfig,
+  testAppwriteConnection,
+} from '../lib/appwriteClient';
+
 interface SyncTabProps {
   onOpenDevicePairing: () => void;
   onRefreshData: () => void;
@@ -44,13 +50,14 @@ export const SyncTab: React.FC<SyncTabProps> = ({
 
   const [conflicts, setConflicts] = useState<SyncQueueItem[]>([]);
   const [syncLogs, setSyncLogs] = useState<SyncLog[]>([]);
-  const [supabaseUrl, setSupabaseUrl] = useState(
-    localStorage.getItem('winrah_supabase_url') || ''
-  );
-  const [supabaseKey, setSupabaseKey] = useState(
-    localStorage.getItem('winrah_supabase_key') || ''
-  );
-  const [isSavedSupabase, setIsSavedSupabase] = useState(false);
+
+  const initialCfg = getAppwriteConfig();
+  const [appwriteEndpoint, setAppwriteEndpoint] = useState(initialCfg.endpoint);
+  const [appwriteProjectId, setAppwriteProjectId] = useState(initialCfg.projectId);
+  const [appwriteDatabaseId, setAppwriteDatabaseId] = useState(initialCfg.databaseId);
+  const [isSavedAppwrite, setIsSavedAppwrite] = useState(false);
+  const [isTestingAppwrite, setIsTestingAppwrite] = useState(false);
+  const [testResult, setTestResult] = useState<{ success: boolean; message: string } | null>(null);
 
   useEffect(() => {
     loadData();
@@ -69,7 +76,6 @@ export const SyncTab: React.FC<SyncTabProps> = ({
     await syncEngine.syncNow();
     await loadData();
     onRefreshData();
-
   };
 
   const handleSimulateConflict = async () => {
@@ -85,15 +91,30 @@ export const SyncTab: React.FC<SyncTabProps> = ({
     await syncEngine.resolveConflict(conflictId, resolution);
     await loadData();
     onRefreshData();
-
   };
 
-  const handleSaveSupabaseConfig = (e: React.FormEvent) => {
-    e.preventDefault();
-    localStorage.setItem('winrah_supabase_url', supabaseUrl.trim());
-    localStorage.setItem('winrah_supabase_key', supabaseKey.trim());
-    setIsSavedSupabase(true);
-    setTimeout(() => setIsSavedSupabase(false), 2500);
+  const handleSaveAppwriteConfig = (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    saveAppwriteConfig({
+      endpoint: appwriteEndpoint,
+      projectId: appwriteProjectId,
+      databaseId: appwriteDatabaseId,
+    });
+    setIsSavedAppwrite(true);
+    setTimeout(() => setIsSavedAppwrite(false), 2500);
+    syncEngine.syncNow();
+  };
+
+  const handleTestAppwrite = async () => {
+    handleSaveAppwriteConfig();
+    setIsTestingAppwrite(true);
+    setTestResult(null);
+    try {
+      const res = await testAppwriteConnection();
+      setTestResult(res);
+    } finally {
+      setIsTestingAppwrite(false);
+    }
   };
 
   return (
@@ -325,55 +346,114 @@ export const SyncTab: React.FC<SyncTabProps> = ({
         </div>
       )}
 
-      {/* Supabase Live Configuration (TDD §6) */}
+      {/* Appwrite Database Live Configuration */}
       <div className="card" style={{ padding: '1.25rem', marginBottom: '1rem' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '1rem' }}>
-          <Settings size={18} style={{ color: 'var(--accent)' }} />
-          <h3 style={{ fontSize: '1rem', fontWeight: 800 }}>
-            Connexion Supabase PostgreSQL (Optionnel)
-          </h3>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '0.5rem', marginBottom: '1rem' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+            <Settings size={18} style={{ color: 'var(--accent)' }} />
+            <h3 style={{ fontSize: '1rem', fontWeight: 800 }}>
+              Connexion Appwrite Database (Cloud ou Auto-hébergé)
+            </h3>
+          </div>
+          <span
+            style={{
+              fontSize: '0.72rem',
+              fontWeight: 700,
+              padding: '0.2rem 0.6rem',
+              borderRadius: 'var(--radius-full)',
+              background: status.mode === 'appwrite' ? 'rgba(16, 185, 129, 0.15)' : 'var(--bg-input)',
+              color: status.mode === 'appwrite' ? '#059669' : 'var(--text-muted)',
+            }}
+          >
+            {status.mode === 'appwrite' ? '● Mode Appwrite Actif' : '○ Mode Simulateur Local'}
+          </span>
         </div>
 
         <p style={{ fontSize: '0.78rem', color: 'var(--text-muted)', marginBottom: '1rem' }}>
-          Par défaut, WINRAH fonctionne à 100% en local hors-ligne avec IndexedDB. Si vous possédez un
-          projet Supabase, collez l’URL et la clé anonyme pour synchroniser avec le cloud (Migrations SQL dans{' '}
-          <code style={{ color: 'var(--accent-dark)' }}>/supabase/migrations/</code>).
+          Par défaut, WINRAH fonctionne à 100% hors-ligne avec IndexedDB. Si vous possédez un serveur
+          Appwrite (Cloud ou Docker auto-hébergé), renseignez vos identifiants pour synchroniser
+          vos modèles, rayons et transferts. (Consultez <code style={{ color: 'var(--accent-dark)' }}>/appwrite/APPWRITE_GUIDE.md</code>).
         </p>
 
-        <form onSubmit={handleSaveSupabaseConfig} style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+        <form onSubmit={handleSaveAppwriteConfig} style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
           <div>
             <label style={{ display: 'block', fontSize: '0.78rem', fontWeight: 700, marginBottom: '0.25rem' }}>
-              Project URL :
+              Appwrite API Endpoint :
             </label>
             <input
               type="text"
               className="input-control"
-              placeholder="https://xyzcompany.supabase.co"
-              value={supabaseUrl}
-              onChange={(e) => setSupabaseUrl(e.target.value)}
+              placeholder="https://cloud.appwrite.io/v1 ou http://192.168.1.50/v1"
+              value={appwriteEndpoint}
+              onChange={(e) => setAppwriteEndpoint(e.target.value)}
             />
+            <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>
+              Par défaut : https://cloud.appwrite.io/v1
+            </span>
           </div>
 
-          <div>
-            <label style={{ display: 'block', fontSize: '0.78rem', fontWeight: 700, marginBottom: '0.25rem' }}>
-              Anon / Public API Key :
-            </label>
-            <input
-              type="password"
-              className="input-control"
-              placeholder="eyJh..."
-              value={supabaseKey}
-              onChange={(e) => setSupabaseKey(e.target.value)}
-            />
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '0.75rem' }}>
+            <div>
+              <label style={{ display: 'block', fontSize: '0.78rem', fontWeight: 700, marginBottom: '0.25rem' }}>
+                Project ID :
+              </label>
+              <input
+                type="text"
+                className="input-control"
+                placeholder="ex: winrah-project ou 673abc123..."
+                value={appwriteProjectId}
+                onChange={(e) => setAppwriteProjectId(e.target.value)}
+              />
+            </div>
+
+            <div>
+              <label style={{ display: 'block', fontSize: '0.78rem', fontWeight: 700, marginBottom: '0.25rem' }}>
+                Database ID :
+              </label>
+              <input
+                type="text"
+                className="input-control"
+                placeholder="winrah_db"
+                value={appwriteDatabaseId}
+                onChange={(e) => setAppwriteDatabaseId(e.target.value)}
+              />
+            </div>
           </div>
 
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginTop: '0.25rem' }}>
-            <button type="submit" className="btn btn-primary" style={{ padding: '0.5rem 1rem' }}>
+          {testResult && (
+            <div
+              style={{
+                padding: '0.65rem 0.85rem',
+                borderRadius: 'var(--radius-md)',
+                fontSize: '0.78rem',
+                fontWeight: 600,
+                background: testResult.success ? 'rgba(16, 185, 129, 0.12)' : 'rgba(239, 68, 68, 0.12)',
+                color: testResult.success ? '#059669' : '#b91c1c',
+                border: `1px solid ${testResult.success ? 'rgba(16, 185, 129, 0.25)' : 'rgba(239, 68, 68, 0.25)'}`,
+              }}
+            >
+              {testResult.message}
+            </div>
+          )}
+
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginTop: '0.25rem', flexWrap: 'wrap' }}>
+            <button
+              type="button"
+              onClick={handleTestAppwrite}
+              disabled={isTestingAppwrite || !appwriteProjectId.trim()}
+              className="btn btn-secondary"
+              style={{ padding: '0.5rem 1rem', fontSize: '0.82rem' }}
+            >
+              {isTestingAppwrite ? 'Test en cours...' : 'Tester la connexion'}
+            </button>
+
+            <button type="submit" className="btn btn-primary" style={{ padding: '0.5rem 1rem', fontSize: '0.82rem' }}>
               Enregistrer configuration
             </button>
-            {isSavedSupabase && (
+
+            {isSavedAppwrite && (
               <span style={{ fontSize: '0.8rem', color: 'var(--success)', fontWeight: 700 }}>
-                ✓ Enregistré !
+                ✓ Configuration enregistrée !
               </span>
             )}
           </div>

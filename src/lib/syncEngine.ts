@@ -5,6 +5,11 @@
 
 import { db } from '../db/indexedDb';
 import { SyncQueueItem, DeviceChangeset } from '../types';
+import {
+  isAppwriteConfigured,
+  pushRecordsToAppwrite,
+  pullRecordsFromAppwrite,
+} from './appwriteClient';
 
 export interface SyncEngineStatus {
   isOnline: boolean;
@@ -12,7 +17,7 @@ export interface SyncEngineStatus {
   lastSyncedAt: string | null;
   pendingChangesCount: number;
   conflictCount: number;
-  mode: 'simulator' | 'supabase';
+  mode: 'simulator' | 'appwrite';
 }
 
 class SyncEngine {
@@ -74,7 +79,6 @@ class SyncEngine {
     const activeConflicts = conflicts.filter((c) => c.status === 'pending');
 
     const lastSynced = localStorage.getItem('winrah_last_synced_at');
-    const supabaseUrl = localStorage.getItem('winrah_supabase_url');
 
     return {
       isOnline: this.isOnlineState,
@@ -82,7 +86,7 @@ class SyncEngine {
       lastSyncedAt: lastSynced,
       pendingChangesCount: pendingCount,
       conflictCount: activeConflicts.length,
-      mode: supabaseUrl ? 'supabase' : 'simulator',
+      mode: isAppwriteConfigured() ? 'appwrite' : 'simulator',
     };
   }
 
@@ -96,45 +100,46 @@ class SyncEngine {
     this.notify();
 
     try {
-      const dirty = await db.getDirtyRecords();
       let pushed = 0;
+      let pulled = 0;
       let conflicts = 0;
 
-      // Process Model Updates
-      for (const m of dirty.models) {
-        pushed++;
-        await db.markSynced('models', m.id, (m.version || 1));
-      }
+      if (isAppwriteConfigured()) {
+        // Appwrite Live Sync
+        const pushResult = await pushRecordsToAppwrite();
+        pushed = pushResult.pushed;
 
-      // Process Warehouse Updates
-      for (const w of dirty.warehouses) {
-        pushed++;
-        await db.markSynced('warehouses', w.id, (w.version || 1));
-      }
+        const pullResult = await pullRecordsFromAppwrite();
+        pulled = pullResult.pulled;
+      } else {
+        // Local Simulator Mode
+        const dirty = await db.getDirtyRecords();
 
-      // Process Area Updates
-      for (const a of dirty.areas) {
-        pushed++;
-        await db.markSynced('areas', a.id, (a.version || 1));
-      }
-
-      // Process Section Updates
-      for (const s of dirty.sections) {
-        pushed++;
-        await db.markSynced('sections', s.id, (s.version || 1));
-      }
-
-      // Process Model Sections
-      for (const ms of dirty.model_sections) {
-        pushed++;
-        await db.markSynced('model_sections', ms.id, (ms.version || 1));
-      }
-
-      // Process Transfers
-      for (const t of dirty.transfers) {
-        pushed++;
-        t.sync_status = 'synced';
-        await db.putRaw('transfers', t);
+        for (const m of dirty.models) {
+          pushed++;
+          await db.markSynced('models', m.id, m.version || 1);
+        }
+        for (const w of dirty.warehouses) {
+          pushed++;
+          await db.markSynced('warehouses', w.id, w.version || 1);
+        }
+        for (const a of dirty.areas) {
+          pushed++;
+          await db.markSynced('areas', a.id, a.version || 1);
+        }
+        for (const s of dirty.sections) {
+          pushed++;
+          await db.markSynced('sections', s.id, s.version || 1);
+        }
+        for (const ms of dirty.model_sections) {
+          pushed++;
+          await db.markSynced('model_sections', ms.id, ms.version || 1);
+        }
+        for (const t of dirty.transfers) {
+          pushed++;
+          t.sync_status = 'synced';
+          await db.putRaw('transfers', t);
+        }
       }
 
       const now = new Date().toISOString();
@@ -144,15 +149,15 @@ class SyncEngine {
       await db.putRaw('sync_logs', {
         id: 'sync-' + Date.now(),
         device_id: localStorage.getItem('winrah_device_id') || 'dev-local-01',
-        direction: 'bidirectional',
+        direction: isAppwriteConfigured() ? 'appwrite_cloud' : 'bidirectional',
         records_pushed: pushed,
-        records_pulled: 0,
+        records_pulled: pulled,
         conflicts,
         started_at: now,
         completed_at: now,
       });
 
-      return { pushed, pulled: 0, conflicts };
+      return { pushed, pulled, conflicts };
     } finally {
       this.isSyncing = false;
       this.notify();

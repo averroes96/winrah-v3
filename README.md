@@ -50,22 +50,20 @@ WINRAH comes equipped with built-in test tools directly accessible from the UI:
 
 ---
 
-## 🗄️ Database Schema & Supabase Migrations
+## 🗄️ Database Schema & Appwrite Integration
 
-The central PostgreSQL / Supabase backend architecture (TDD §4–§7) is fully codified in `supabase/`:
+The cloud backend architecture is configured for **Appwrite Database** (Appwrite Cloud or Self-Hosted Docker), documented in `appwrite/`:
 
-- **`supabase/migrations/001_initial_schema.sql`**  
-  Creates the 11 entities (`warehouse`, `area`, `section`, `device`, `model`, `model_section`, `transfer_log`, `sync_log`, `search_log`, `audit_log`, `sync_queue`) with `pg_trgm` indexes for fast partial matching and composite indexes for zero-result queries.
-- **`supabase/migrations/002_rls_policies.sql`**  
-  Complete Row Level Security policies:
-  - All authenticated devices can read and write active entities.
-  - Hard deletes are blocked (`DELETE USING (false)`).
-  - Append-only logs (`transfer_log`, `search_log`, `audit_log`) restrict INSERT to `device_id = auth_device_id()`.
-  - `sync_queue` is writable only by `service_role`.
-- **`supabase/migrations/003_sync_rpcs.sql`**  
-  Implements version-vector RPCs: `sync_push`, `sync_pull` (high-water mark based), and `resolve_conflict`.
-- **`supabase/seed.sql`**  
-  Sample initial data script.
+- **`appwrite/APPWRITE_GUIDE.md`**  
+  Complete step-by-step setup guide for creating the database (`winrah_db`) and collections:
+  - `warehouses`: Central warehouses / hubs
+  - `areas`: Specific zones within warehouses
+  - `sections`: Physical aisles, shelves, and racks
+  - `models`: Shoes catalog with reference codes, size ranges, photos
+  - `model_sections`: Presence-only placement mappings
+  - `transfers`: Immutable audit trail of model relocation logs
+- **`src/lib/appwriteClient.ts`**  
+  Client library handling connection testing, document ID sanitization, dirty queue push, and incremental pull sync.
 
 ---
 
@@ -75,4 +73,4 @@ The central PostgreSQL / Supabase backend architecture (TDD §4–§7) is fully 
 - **Styling:** Vanilla CSS design system (`src/styles/theme.css`) with high-contrast tactile elements for warehouse floor use
 - **Local Persistence:** Native IndexedDB (`winrah_db`) with typed reactive subscriptions
 - **Barcode & QR:** `html5-qrcode` & `qrcode`
-- **Cloud Backend (Optional):** Supabase PostgreSQL + RLS + Version-Vector RPCs
+- **Cloud Backend (Optional):** Appwrite Database (Cloud or Self-Hosted) with offline-first bidirectional sync
