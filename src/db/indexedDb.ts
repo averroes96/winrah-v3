@@ -909,6 +909,21 @@ export class LocalDatabase {
       assignmentsRemoved: msIdsToDelete.length,
     };
   }
+
+  /**
+   * Cleans up legacy micro search logs (e.g. single keystroke fragments < 2 chars).
+   */
+  async cleanupFragmentedSearchLogs(): Promise<number> {
+    await this.init();
+    const allLogs = await this.getAll<SearchLog>('search_logs');
+    const toDelete = allLogs.filter((log) => !log.query_text || log.query_text.trim().length < 2);
+    if (toDelete.length === 0) return 0;
+
+    for (const log of toDelete) {
+      await this.delete('search_logs', log.id);
+    }
+    return toDelete.length;
+  }
 }
 
 export const db = new LocalDatabase();

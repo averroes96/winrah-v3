@@ -102,6 +102,13 @@ export function App() {
       return;
     }
 
+    // One-time cleanup of legacy single-character / empty search logs
+    const CLEAN_SEARCH_LOGS_KEY = 'winrah_clean_fragmented_search_logs_v1';
+    if (!localStorage.getItem(CLEAN_SEARCH_LOGS_KEY)) {
+      localStorage.setItem(CLEAN_SEARCH_LOGS_KEY, 'true');
+      await db.cleanupFragmentedSearchLogs();
+    }
+
     const [w, a, s, m, ms, t, sl, al] = await Promise.all([
       db.getAll<Warehouse>('warehouses'),
       db.getAll<Area>('areas'),

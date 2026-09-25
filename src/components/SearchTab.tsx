@@ -4,7 +4,7 @@
 // camera barcode trigger, "Search Everywhere" toggle, and audit logging.
 // ============================================================================
 
-import React, { useState, useMemo, useEffect, useRef } from 'react';
+import React, { useState, useMemo, useEffect, useRef, useCallback } from 'react';
 import {
   Search,
   ScanBarcode,
@@ -69,6 +69,16 @@ export const SearchTab: React.FC<SearchTabProps> = ({
   const [isSearchEverywhere, setIsSearchEverywhere] = useState(false);
   const [selectedAreaId, setSelectedAreaId] = useState<string>('all');
   const lastLoggedQueryRef = useRef<string>('');
+  const searchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Keep a ref to the latest search context so logging always has up-to-date data
+  // without re-creating timers when unrelated props or states change
+  const currentSearchContextRef = useRef({
+    query,
+    resultCount: 0,
+    isSearchEverywhere,
+    warehouseId: activeWarehouse?.id || null,
+  });
 
   // Only load/show models when user starts typing
   const isTyping = query.trim().length > 0;
@@ -115,27 +125,84 @@ export const SearchTab: React.FC<SearchTabProps> = ({
     });
   }, [disambiguatedList, query, isSearchEverywhere, activeWarehouse, selectedAreaId, isTyping]);
 
-  // Log search query for analytics & zero-result detection (FR-8.2, FR-8.3)
-  useEffect(() => {
-    const trimmed = query.trim();
-    if (trimmed.length >= 2 && trimmed !== lastLoggedQueryRef.current) {
-      const timer = setTimeout(async () => {
-        lastLoggedQueryRef.current = trimmed;
-        await db.putRaw('search_logs', {
-          id: 'sl-' + Date.now(),
+  // Keep search context ref updated on every render
+  currentSearchContextRef.current = {
+    query,
+    resultCount: searchResults.length,
+    isSearchEverywhere,
+    warehouseId: activeWarehouse?.id || null,
+  };
+
+  // Immediate or debounced flush helper
+  const flushSearchLog = useCallback(async () => {
+    if (searchTimerRef.current) {
+      clearTimeout(searchTimerRef.current);
+      searchTimerRef.current = null;
+    }
+
+    const ctx = currentSearchContextRef.current;
+    const trimmed = ctx.query.trim();
+
+    // Query must be at least 2 characters to be a meaningful search query
+    if (trimmed.length < 2) return;
+
+    // Prevent duplicate logs if the query hasn't changed since the last logged search
+    if (trimmed.toUpperCase() === lastLoggedQueryRef.current.toUpperCase()) return;
+
+    lastLoggedQueryRef.current = trimmed;
+
+    try {
+      await db.putRaw(
+        'search_logs',
+        {
+          id: 'sl-' + Date.now() + '-' + Math.random().toString(36).substring(2, 6),
           device_id: localStorage.getItem('winrah_device_id') || 'dev-local-01',
-          warehouse_id: isSearchEverywhere ? null : activeWarehouse?.id || null,
+          warehouse_id: ctx.isSearchEverywhere ? null : ctx.warehouseId,
           query_text: trimmed,
-          result_count: searchResults.length,
-          is_everywhere: isSearchEverywhere,
+          result_count: ctx.resultCount,
+          is_everywhere: ctx.isSearchEverywhere,
           sync_status: 'pending',
           created_at: new Date().toISOString(),
-        });
-      }, 700);
-
-      return () => clearTimeout(timer);
+        },
+        false // Do NOT trigger store subscriber notifications which cause re-render loops while searching
+      );
+    } catch (err) {
+      console.warn('Failed to record search log:', err);
     }
-  }, [query, searchResults.length, isSearchEverywhere, activeWarehouse]);
+  }, []);
+
+  // 5-second inactivity debounced logger (resets with each typed character)
+  useEffect(() => {
+    // Clear previous timer on any keystroke/query change
+    if (searchTimerRef.current) {
+      clearTimeout(searchTimerRef.current);
+      searchTimerRef.current = null;
+    }
+
+    const trimmed = query.trim();
+
+    // Do not schedule if query has fewer than 2 characters
+    if (trimmed.length < 2) {
+      return;
+    }
+
+    // Do not schedule if query matches what was already logged
+    if (trimmed.toUpperCase() === lastLoggedQueryRef.current.toUpperCase()) {
+      return;
+    }
+
+    // Wait for 5 seconds of inactivity after the last typed character
+    searchTimerRef.current = setTimeout(() => {
+      flushSearchLog();
+    }, 5000);
+
+    return () => {
+      if (searchTimerRef.current) {
+        clearTimeout(searchTimerRef.current);
+        searchTimerRef.current = null;
+      }
+    };
+  }, [query, flushSearchLog]);
 
   return (
     <div className="fade-in">
@@ -159,6 +226,11 @@ export const SearchTab: React.FC<SearchTabProps> = ({
           type="text"
           value={query}
           onChange={(e) => setQuery(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') {
+              flushSearchLog();
+            }
+          }}
           placeholder={t('search.placeholder')}
           className="ref-code"
           style={{
@@ -175,7 +247,13 @@ export const SearchTab: React.FC<SearchTabProps> = ({
         {query && (
           <button
             type="button"
-            onClick={() => setQuery('')}
+            onClick={() => {
+              if (searchTimerRef.current) {
+                clearTimeout(searchTimerRef.current);
+                searchTimerRef.current = null;
+              }
+              setQuery('');
+            }}
             style={{
               background: 'transparent',
               border: 'none',
@@ -405,7 +483,10 @@ export const SearchTab: React.FC<SearchTabProps> = ({
                   flexWrap: 'wrap',
                   cursor: 'pointer',
                 }}
-                onClick={() => onViewModelDetails(item)}
+                onClick={() => {
+                  flushSearchLog();
+                  onViewModelDetails(item);
+                }}
               >
                 {/* Photo Thumbnail */}
                 {item.model.photo_url ? (
@@ -519,6 +600,7 @@ export const SearchTab: React.FC<SearchTabProps> = ({
                     type="button"
                     onClick={(e) => {
                       e.stopPropagation();
+                      flushSearchLog();
                       onInitiateTransfer(item.model, item.sections[0]?.section.id);
                     }}
                     className="btn btn-primary"
