@@ -134,6 +134,7 @@ export interface AuditLog {
   entity_id: string;
   action: AuditAction;
   changes?: Record<string, any> | null;
+  sync_status?: 'pending' | 'synced';
   created_at: string;
 }
 

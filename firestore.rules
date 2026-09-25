@@ -1,0 +1,11 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // WINRAH Warehouse Management System Rules
+    // Allows full read/write for all business collections
+    match /{document=**} {
+      allow read, write: if true;
+    }
+  }
+}

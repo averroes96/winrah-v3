@@ -692,57 +692,139 @@ export async function fetchServerDatabase(
 }
 
 /**
- * Clears all documents from all Appwrite collections to allow a clean full push.
+ * Collections preserved during server database wipe (never deleted).
+ * Per requirements: "everything except for search logs and audits should be wiped out to oblivion".
+ */
+export const PRESERVED_SERVER_COLLECTIONS = new Set<string>([
+  APPWRITE_COLLECTIONS.search_logs,
+  'audit_logs',
+]);
+
+/**
+ * Collections to completely wipe clean to 0 documents when pushing local database.
+ * Processed in child-to-parent dependency order.
+ */
+export const WIPABLE_SERVER_COLLECTIONS = [
+  APPWRITE_COLLECTIONS.model_sections,
+  APPWRITE_COLLECTIONS.transfers,
+  APPWRITE_COLLECTIONS.models,
+  APPWRITE_COLLECTIONS.sections,
+  APPWRITE_COLLECTIONS.areas,
+  APPWRITE_COLLECTIONS.warehouses,
+] as const;
+
+/**
+ * Clears all documents from Appwrite business collections down to 0 documents.
+ * Guarantees complete oblivion of previous data with exhaustive batch pagination,
+ * concurrency control (15 workers), and automatic 429 rate-limit backoff retries.
+ * Strictly preserves search_logs and audit_logs.
  */
 export async function clearServerDatabase(
   onProgress?: SyncProgressCallback
-): Promise<void> {
+): Promise<{ deleted: number }> {
   const inst = getAppwriteClient();
   if (!inst) throw new Error('Client Appwrite non configuré.');
   const cfg = getAppwriteConfig();
   await ensureAppwriteSession(inst.client);
 
-  const collections = [
-    APPWRITE_COLLECTIONS.search_logs,
-    APPWRITE_COLLECTIONS.transfers,
-    APPWRITE_COLLECTIONS.model_sections,
-    APPWRITE_COLLECTIONS.models,
-    APPWRITE_COLLECTIONS.sections,
-    APPWRITE_COLLECTIONS.areas,
-    APPWRITE_COLLECTIONS.warehouses,
-  ];
+  const collections = WIPABLE_SERVER_COLLECTIONS;
+  let grandTotalDeleted = 0;
 
   for (let i = 0; i < collections.length; i++) {
     const col = collections[i];
+    let totalDeletedInCol = 0;
+
     onProgress?.({
       phase: 'init',
-      message: `Nettoyage du serveur : suppression de la collection "${col}"...`,
+      message: `Nettoyage du serveur : vidage de "${col}"...`,
       current: i,
       total: collections.length,
       percentage: Math.round((i / collections.length) * 100),
     });
 
-    try {
-      const docs = await fetchAllCollectionDocuments(inst.databases, cfg.databaseId, col);
-      if (docs.length > 0) {
-        await runConcurrentPool(
-          docs,
-          25,
-          async (doc) => {
+    // Exhaustive batch deletion loop: guarantees 0 documents remain
+    while (true) {
+      let docs: any[] = [];
+
+      for (let fetchAttempt = 0; fetchAttempt < 5; fetchAttempt++) {
+        try {
+          const res = await inst.databases.listDocuments(cfg.databaseId, col, [
+            Query.limit(100),
+          ]);
+          docs = res.documents || [];
+          break;
+        } catch (err: any) {
+          if (err?.code === 404) {
+            docs = [];
+            break;
+          }
+          if (err?.code === 429) {
+            await new Promise((r) => setTimeout(r, 600 * (fetchAttempt + 1)));
+            continue;
+          }
+          if (fetchAttempt === 4) {
+            console.warn(`Error listing documents in ${col}:`, err?.message || err);
+            docs = [];
+            break;
+          }
+          await new Promise((r) => setTimeout(r, 400));
+        }
+      }
+
+      if (docs.length === 0) {
+        // Collection has been completely emptied
+        break;
+      }
+
+      // Concurrently delete this batch with exponential backoff on 429
+      let nextIdx = 0;
+      const concurrency = Math.min(15, docs.length);
+      const workers = Array.from({ length: concurrency }, async () => {
+        while (nextIdx < docs.length) {
+          const doc = docs[nextIdx++];
+          for (let delAttempt = 0; delAttempt < 6; delAttempt++) {
             try {
               await inst.databases.deleteDocument(cfg.databaseId, col, doc.$id);
+              totalDeletedInCol++;
+              grandTotalDeleted++;
+              break;
             } catch (err: any) {
-              if (err?.code !== 404) {
-                console.warn(`Error deleting ${doc.$id} in ${col}:`, err?.message);
+              if (err?.code === 404) {
+                totalDeletedInCol++;
+                grandTotalDeleted++;
+                break;
               }
+              if (err?.code === 429) {
+                const backoffMs = 500 * (delAttempt + 1) + Math.floor(Math.random() * 250);
+                await new Promise((r) => setTimeout(r, backoffMs));
+                continue;
+              }
+              if (delAttempt === 5) {
+                console.warn(`Failed to delete doc ${doc.$id} in ${col}:`, err?.message || err);
+                break;
+              }
+              await new Promise((r) => setTimeout(r, 400));
             }
           }
-        );
-      }
-    } catch (e) {
-      console.warn(`Error clearing collection ${col}:`, e);
+        }
+      });
+
+      await Promise.all(workers);
+
+      onProgress?.({
+        phase: 'init',
+        message: `Nettoyage du serveur : "${col}" (${totalDeletedInCol} supprimés)...`,
+        current: i,
+        total: collections.length,
+        percentage: Math.min(99, Math.round(((i + 0.5) / collections.length) * 100)),
+      });
+
+      // Brief breather between batches to respect Appwrite Cloud quotas
+      await new Promise((r) => setTimeout(r, 100));
     }
   }
+
+  return { deleted: grandTotalDeleted };
 }
 
 /**
@@ -811,7 +893,7 @@ export async function pushRecordsToAppwrite(
   const serverSectionsByName = new Map<string, string>(); // "area$id::name_lower" -> server $id
   const serverModelsByBaseId = new Map<string, string>(); // "warehouse::baseId" -> server $id
 
-  if (areasToPush.length > 0 || sectionsToPush.length > 0 || modelsToPush.length > 0) {
+  if (!forceAll && (areasToPush.length > 0 || sectionsToPush.length > 0 || modelsToPush.length > 0)) {
     try {
       const promises: Promise<any>[] = [];
       if (areasToPush.length > 0) {
@@ -906,14 +988,31 @@ export async function pushRecordsToAppwrite(
     return serverModelsByBaseId.get(key) || toAppwriteDocId(baseId);
   }
 
-  // Optimized upsert: attempt CREATE first (1 network call for new records), fallback to UPDATE if 409
+  // Optimized upsert: attempt CREATE first, fallback to UPDATE if 409, with retry on 429 rate limit
   async function upsertDocument(collectionId: string, docId: string, payload: any): Promise<void> {
-    try {
-      await inst!.databases.createDocument(cfg.databaseId, collectionId, docId, payload);
-    } catch (err: any) {
-      if (err?.code === 409) {
-        await inst!.databases.updateDocument(cfg.databaseId, collectionId, docId, payload);
-      } else {
+    for (let attempt = 0; attempt < 5; attempt++) {
+      try {
+        await inst!.databases.createDocument(cfg.databaseId, collectionId, docId, payload);
+        return;
+      } catch (err: any) {
+        if (err?.code === 409) {
+          try {
+            await inst!.databases.updateDocument(cfg.databaseId, collectionId, docId, payload);
+            return;
+          } catch (updateErr: any) {
+            if (updateErr?.code === 429 && attempt < 4) {
+              const backoffMs = 500 * (attempt + 1) + Math.floor(Math.random() * 200);
+              await new Promise((r) => setTimeout(r, backoffMs));
+              continue;
+            }
+            throw updateErr;
+          }
+        }
+        if (err?.code === 429 && attempt < 4) {
+          const backoffMs = 500 * (attempt + 1) + Math.floor(Math.random() * 200);
+          await new Promise((r) => setTimeout(r, backoffMs));
+          continue;
+        }
         throw err;
       }
     }

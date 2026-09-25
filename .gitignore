@@ -31,5 +31,6 @@ dist-ssr
 android/local.properties
 .env
 .env*.local
+release/
 
 

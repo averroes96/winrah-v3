@@ -129,7 +129,7 @@ export function App() {
     setModelSections(ms);
     setTransfers(t.sort((x, y) => new Date(y.created_at).getTime() - new Date(x.created_at).getTime()));
     setSearchLogs(sl.sort((x, y) => new Date(y.created_at).getTime() - new Date(x.created_at).getTime()));
-    setAuditLogs(al);
+    setAuditLogs(al.sort((x, y) => new Date(y.created_at).getTime() - new Date(x.created_at).getTime()));
 
     // Sync active warehouse ID with available warehouses
     const storedWh = localStorage.getItem('winrah_active_warehouse_id');

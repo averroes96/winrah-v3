@@ -345,6 +345,19 @@ export const CatalogTab: React.FC<CatalogTabProps> = ({
       });
     }
 
+    // 3. Log Audit Trail
+    await db.logAudit({
+      action: 'create',
+      entity_type: 'model',
+      entity_id: modelId,
+      changes: {
+        reference_code: newModelRef.trim().toUpperCase(),
+        name: newModelName.trim() || null,
+        warehouse_id: activeWarehouse.id,
+        section_id: newModelSectionId || null,
+      },
+    });
+
     setNewModelRef('');
     setNewModelName('');
     setNewModelSize('');

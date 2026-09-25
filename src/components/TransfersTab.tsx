@@ -174,6 +174,19 @@ export const TransfersTab: React.FC<TransfersTabProps> = ({
 
       await db.putRaw('transfers', transferEntry);
 
+      await db.logAudit({
+        action: 'transfer',
+        entity_type: 'transfer',
+        entity_id: transferEntry.id,
+        device_id: deviceId,
+        changes: {
+          model_id: modelId,
+          from_section_id: fromSectionId,
+          to_section_id: targetSectionId,
+          performed_by: operatorName,
+        },
+      });
+
       // 3. Save for undo grace window (FR-6.6)
       setLastTransferLog({
         transfer: transferEntry,
@@ -209,6 +222,17 @@ export const TransfersTab: React.FC<TransfersTabProps> = ({
       performed_by: `${operatorName} (ANNULATION)`,
       sync_status: 'pending',
       created_at: new Date().toISOString(),
+    });
+
+    await db.logAudit({
+      action: 'restore',
+      entity_type: 'transfer',
+      entity_id: lastTransferLog.transfer.id,
+      changes: {
+        model_id: lastTransferLog.modelId,
+        restored_to_section_id: lastTransferLog.previousSectionId,
+        reason: 'annulation_grace_window',
+      },
     });
 
     setLastTransferLog(null);

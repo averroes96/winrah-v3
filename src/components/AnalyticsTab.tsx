@@ -110,6 +110,95 @@ export const AnalyticsTab: React.FC<AnalyticsTabProps> = ({
     });
   }, [areas, sections]);
 
+  // 5. Combined Activity Stream (Searches, Transfers, Entity Changes - FR-8.1)
+  const activityStream = useMemo(() => {
+    type ActivityItem = {
+      id: string;
+      type: 'search' | 'transfer' | 'audit';
+      badge: string;
+      badgeColor: string;
+      description: React.ReactNode;
+      created_at: string;
+    };
+
+    const items: ActivityItem[] = [];
+
+    // Searches
+    for (const s of searchLogs) {
+      items.push({
+        id: 's-' + s.id,
+        type: 'search',
+        badge: 'Recherche',
+        badgeColor: s.result_count > 0 ? 'var(--accent)' : 'var(--danger)',
+        description: (
+          <span>
+            Recherche de <span className="ref-code">"{s.query_text}"</span>{' '}
+            <span style={{ color: s.result_count > 0 ? 'var(--success)' : 'var(--danger)', fontSize: '0.75rem' }}>
+              ({s.result_count} résultat{s.result_count > 1 ? 's' : ''})
+            </span>
+          </span>
+        ),
+        created_at: s.created_at,
+      });
+    }
+
+    // Transfers
+    const modelMap = new Map(models.map((m) => [m.id, m]));
+    const sectionMap = new Map(sections.map((sec) => [sec.id, sec]));
+
+    for (const t of transfers) {
+      const m = modelMap.get(t.model_id);
+      const toSec = sectionMap.get(t.to_section_id);
+      const fromSec = t.from_section_id ? sectionMap.get(t.from_section_id) : null;
+
+      items.push({
+        id: 't-' + t.id,
+        type: 'transfer',
+        badge: 'Transfert',
+        badgeColor: '#8B5CF6',
+        description: (
+          <span>
+            Transfert de <span className="ref-code">{m?.reference_code || 'Modèle'}</span>{' '}
+            {fromSec ? `de ${fromSec.name} ` : ''}vers{' '}
+            <span style={{ fontWeight: 600, color: 'var(--text-primary)' }}>{toSec?.name || 'Rayon'}</span>
+            {t.performed_by ? ` (par ${t.performed_by})` : ''}
+          </span>
+        ),
+        created_at: t.created_at,
+      });
+    }
+
+    // Entity Audits
+    for (const a of auditLogs) {
+      if (a.entity_type === 'transfer') continue; // Avoid duplicate display with transfers
+
+      let actionLabel = 'Action';
+      if (a.action === 'create') actionLabel = 'Création';
+      else if (a.action === 'update') actionLabel = 'Modification';
+      else if (a.action === 'archive') actionLabel = 'Archivage';
+      else if (a.action === 'restore') actionLabel = 'Restauration';
+
+      const refCode = a.changes?.reference_code ? ` "${a.changes.reference_code}"` : '';
+
+      items.push({
+        id: 'a-' + a.id,
+        type: 'audit',
+        badge: actionLabel,
+        badgeColor: a.action === 'create' ? 'var(--success)' : '#3B82F6',
+        description: (
+          <span>
+            {actionLabel} {a.entity_type}{refCode}
+          </span>
+        ),
+        created_at: a.created_at,
+      });
+    }
+
+    return items
+      .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
+      .slice(0, 30);
+  }, [searchLogs, transfers, auditLogs, models, sections]);
+
   return (
     <div className="fade-in">
       {/* ZERO-RESULT SEARCHES ALERT CARD (Crucial BRD requirement for gap analysis) */}
@@ -261,52 +350,68 @@ export const AnalyticsTab: React.FC<AnalyticsTabProps> = ({
 
       {/* Audit Log Stream (FR-8.1) */}
       <div className="card" style={{ padding: '1.25rem' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '1rem' }}>
-          <Clock size={18} style={{ color: 'var(--accent)' }} />
-          <h3 style={{ fontSize: '0.98rem', fontWeight: 800 }}>
-            Journal d’audit & d'activité ({searchLogs.length + transfers.length} événements)
-          </h3>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1rem' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+            <Clock size={18} style={{ color: 'var(--accent)' }} />
+            <h3 style={{ fontSize: '0.98rem', fontWeight: 800 }}>
+              Journal d’audit & d'activité ({searchLogs.length + transfers.length + auditLogs.length} événements)
+            </h3>
+          </div>
+          <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
+            Dernières 30 activités
+          </span>
         </div>
 
         <div
           style={{
-            maxHeight: '260px',
+            maxHeight: '320px',
             overflowY: 'auto',
             display: 'flex',
             flexDirection: 'column',
             gap: '0.45rem',
           }}
         >
-          {searchLogs.slice(0, 15).map((log) => (
-            <div
-              key={log.id}
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'space-between',
-                padding: '0.45rem 0.75rem',
-                fontSize: '0.78rem',
-                background: 'var(--bg-page)',
-                borderRadius: 'var(--radius-sm)',
-                borderLeft: `3px solid ${log.result_count > 0 ? 'var(--accent)' : 'var(--danger)'}`,
-              }}
-            >
-              <div>
-                <span style={{ color: 'var(--text-muted)', marginRight: '0.45rem' }}>
-                  [Recherche]
-                </span>
-                <span className="ref-code" style={{ marginRight: '0.45rem' }}>
-                  "{log.query_text}"
-                </span>
-                <span style={{ color: log.result_count > 0 ? 'var(--success)' : 'var(--danger)' }}>
-                  ({log.result_count} résultat{log.result_count > 1 ? 's' : ''})
+          {activityStream.length === 0 ? (
+            <p style={{ color: 'var(--text-muted)', fontSize: '0.82rem', padding: '0.5rem 0' }}>
+              Aucune activité enregistrée pour le moment.
+            </p>
+          ) : (
+            activityStream.map((item) => (
+              <div
+                key={item.id}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  padding: '0.45rem 0.75rem',
+                  fontSize: '0.78rem',
+                  background: 'var(--bg-page)',
+                  borderRadius: 'var(--radius-sm)',
+                  borderLeft: `3px solid ${item.badgeColor}`,
+                  border: '1px solid var(--border-default)',
+                }}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                  <span
+                    style={{
+                      padding: '0.15rem 0.45rem',
+                      borderRadius: 'var(--radius-xs)',
+                      background: 'rgba(255, 255, 255, 0.06)',
+                      fontSize: '0.7rem',
+                      fontWeight: 600,
+                      color: item.badgeColor,
+                    }}
+                  >
+                    [{item.badge}]
+                  </span>
+                  <div>{item.description}</div>
+                </div>
+                <span style={{ color: 'var(--text-muted)', fontSize: '0.7rem', whiteSpace: 'nowrap', marginLeft: '0.75rem' }}>
+                  {new Date(item.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
                 </span>
               </div>
-              <span style={{ color: 'var(--text-muted)', fontSize: '0.7rem' }}>
-                {new Date(log.created_at).toLocaleTimeString()}
-              </span>
-            </div>
-          ))}
+            ))
+          )}
         </div>
       </div>
     </div>

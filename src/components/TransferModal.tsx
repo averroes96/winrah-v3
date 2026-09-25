@@ -73,8 +73,9 @@ export const TransferModal: React.FC<TransferModalProps> = ({
     }
 
     // 2. Transfer Log
+    const transferId = 'tr-' + Date.now();
     await db.putRaw('transfers', {
-      id: 'tr-' + Date.now(),
+      id: transferId,
       model_id: model.id,
       from_section_id: fromSectionId || toSectionId,
       to_section_id: toSectionId,
@@ -82,6 +83,19 @@ export const TransferModal: React.FC<TransferModalProps> = ({
       performed_by: operator,
       sync_status: 'pending',
       created_at: now,
+    });
+
+    await db.logAudit({
+      action: 'transfer',
+      entity_type: 'transfer',
+      entity_id: transferId,
+      device_id: deviceId,
+      changes: {
+        model_id: model.id,
+        from_section_id: fromSectionId || toSectionId,
+        to_section_id: toSectionId,
+        performed_by: operator,
+      },
     });
 
     confetti({ particleCount: 40, spread: 55, origin: { y: 0.3 } });

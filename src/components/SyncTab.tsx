@@ -24,7 +24,12 @@ import { db } from '../db/indexedDb';
 import { SyncQueueItem, SyncLog } from '../types';
 import { initBaseWarehouse } from '../db/seedData';
 
-import { fetchServerDatabase, SyncProgressUpdate } from '../lib/appwriteClient';
+import {
+  fetchFirebaseDatabase,
+  isFirebaseConfigured,
+  SyncProgressUpdate,
+} from '../lib/firebaseClient';
+import { fetchServerDatabase } from '../lib/appwriteClient';
 
 interface SyncTabProps {
   onOpenDevicePairing: () => void;
@@ -133,10 +138,11 @@ export const SyncTab: React.FC<SyncTabProps> = ({
     setIsPushingServer(true);
     setStatusFeedback(null);
     try {
-      const res = await syncEngine.pushAllToAppwrite((p) => setSyncProgress(p));
+      const res = await syncEngine.pushAllToCloud((p) => setSyncProgress(p));
+      const targetName = isFirebaseConfigured() ? 'Firebase Firestore' : 'Appwrite';
       setStatusFeedback({
         success: true,
-        text: `Base serveur vidée et base locale envoyée avec succès ! ${res.pushed} enregistrements synchronisés sur le serveur.`,
+        text: `Base serveur vidée et base locale envoyée avec succès sur ${targetName} ! ${res.pushed} enregistrements synchronisés.`,
       });
       await loadData();
       onRefreshData();
@@ -165,10 +171,13 @@ export const SyncTab: React.FC<SyncTabProps> = ({
     setIsFetchingServer(true);
     setStatusFeedback(null);
     try {
-      const res = await fetchServerDatabase(true, (p) => setSyncProgress(p));
+      const res = isFirebaseConfigured()
+        ? await fetchFirebaseDatabase(true, (p) => setSyncProgress(p))
+        : await fetchServerDatabase(true, (p) => setSyncProgress(p));
+      const targetName = isFirebaseConfigured() ? 'Firebase Firestore' : 'Appwrite';
       setStatusFeedback({
         success: true,
-        text: `Base locale réinitialisée et base serveur téléchargée avec succès (${res.total} enregistrements chargés).`,
+        text: `Base locale réinitialisée et base serveur (${targetName}) téléchargée avec succès (${res.total} enregistrements chargés).`,
       });
       await loadData();
       onRefreshData();
@@ -233,8 +242,13 @@ export const SyncTab: React.FC<SyncTabProps> = ({
                 {status.isOnline ? 'Prêt à synchroniser' : 'Mode Hors-ligne actif'}
               </h2>
               <span className={`badge ${status.isOnline ? 'badge-emerald' : 'badge-rose'}`}>
-                {status.isOnline ? 'Connecté' : 'Déconnecté'}
+                {status.isOnline ? (status.mode === 'firebase' ? 'Firebase Firestore' : status.mode === 'appwrite' ? 'Appwrite' : 'Connecté') : 'Déconnecté'}
               </span>
+              {status.pendingChangesCount > 0 && (
+                <span className="badge badge-amber" style={{ fontWeight: 700 }}>
+                  {status.pendingChangesCount} en attente
+                </span>
+              )}
             </div>
 
             <p style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>
@@ -262,7 +276,7 @@ export const SyncTab: React.FC<SyncTabProps> = ({
               padding: '0.55rem 0.9rem',
               fontWeight: 700,
             }}
-            title="Envoyer l'intégralité des données locales vers le serveur Appwrite"
+            title="Envoyer l'intégralité des données locales vers le serveur Cloud"
           >
             <CloudUpload size={16} className={isPushingServer ? 'animate-spin' : ''} />
             <span>{isPushingServer ? 'Envoi...' : 'Envoyer base locale'}</span>
@@ -282,7 +296,7 @@ export const SyncTab: React.FC<SyncTabProps> = ({
               padding: '0.55rem 0.9rem',
               fontWeight: 700,
             }}
-            title="Télécharger l'ensemble des données du serveur Appwrite dans la base locale avec déduplication intégrale"
+            title="Télécharger l'ensemble des données du serveur Cloud dans la base locale avec déduplication intégrale"
           >
             <CloudDownload size={16} className={isFetchingServer ? 'animate-spin' : ''} />
             <span>{isFetchingServer ? 'Téléchargement...' : 'Télécharger base serveur'}</span>

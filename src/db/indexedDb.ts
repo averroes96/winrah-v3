@@ -14,6 +14,7 @@ import {
   SyncLog,
   SearchLog,
   AuditLog,
+  AuditAction,
   SyncQueueItem,
 } from '../types';
 
@@ -410,7 +411,9 @@ export class LocalDatabase {
     const search_logs = (await this.getAll<SearchLog>('search_logs')).filter(
       (s) => s.sync_status !== 'synced'
     );
-    const audit_logs = await this.getAll<AuditLog>('audit_logs');
+    const audit_logs = (await this.getAll<AuditLog>('audit_logs')).filter(
+      (a) => a.sync_status !== 'synced'
+    );
 
     return {
       warehouses,
@@ -473,6 +476,29 @@ export class LocalDatabase {
     });
   }
 
+  // Convenient helper to record audit logs with pending sync status
+  async logAudit(entry: {
+    action: AuditAction;
+    entity_type: string;
+    entity_id: string;
+    changes?: Record<string, any> | null;
+    device_id?: string;
+    created_at?: string;
+  }): Promise<AuditLog> {
+    const auditLog: AuditLog = {
+      id: 'audit-' + Date.now() + '-' + Math.random().toString(36).substring(2, 7),
+      device_id: entry.device_id || localStorage.getItem('winrah_device_id') || 'dev-local-01',
+      entity_type: entry.entity_type,
+      entity_id: entry.entity_id,
+      action: entry.action,
+      changes: entry.changes || null,
+      sync_status: 'pending',
+      created_at: entry.created_at || new Date().toISOString(),
+    };
+    await this.putRaw('audit_logs', auditLog);
+    return auditLog;
+  }
+
   // Clear all data for clean resets / testing
   async clearAll(): Promise<void> {
     await this.init();
@@ -487,6 +513,27 @@ export class LocalDatabase {
           tx.objectStore(name).clear();
         }
         tx.oncomplete = () => resolve();
+        tx.onerror = () => reject(tx.error);
+        tx.onabort = () => reject(tx.error);
+      } catch (err) {
+        reject(err);
+      }
+    });
+  }
+
+  // Clear a specific table/store
+  async clearStore(storeName: string): Promise<void> {
+    await this.init();
+    if (!this.db || !this.db.objectStoreNames.contains(storeName)) return;
+
+    return new Promise((resolve, reject) => {
+      try {
+        const tx = this.db!.transaction(storeName, 'readwrite');
+        tx.objectStore(storeName).clear();
+        tx.oncomplete = () => {
+          this.notify();
+          resolve();
+        };
         tx.onerror = () => reject(tx.error);
         tx.onabort = () => reject(tx.error);
       } catch (err) {

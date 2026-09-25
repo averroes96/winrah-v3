@@ -136,6 +136,19 @@ export const QuickAddModelBottomSheet: React.FC<QuickAddModelBottomSheetProps> =
         });
       }
 
+      // 3. Log Audit Trail
+      await db.logAudit({
+        action: 'create',
+        entity_type: 'model',
+        entity_id: modelId,
+        changes: {
+          reference_code: cleanRef,
+          name: name.trim() || null,
+          warehouse_id: activeWarehouse.id,
+          section_id: sectionId || null,
+        },
+      });
+
       // Micro celebration
       try {
         confetti({
