@@ -38,6 +38,7 @@ export async function initBaseWarehouse(): Promise<void> {
   // Set active warehouse in localStorage
   localStorage.setItem('winrah_active_warehouse_id', 'wh-base');
   localStorage.setItem('winrah_device_id', 'dev-local-01');
+  localStorage.removeItem('winrah_last_synced_at');
 
   // Notify subscribers once initialized
   db.notify();

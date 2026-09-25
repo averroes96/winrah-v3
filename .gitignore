@@ -29,4 +29,7 @@ dist-ssr
 *.p12
 *.mobileprovision
 android/local.properties
+.env
+.env*.local
+
 

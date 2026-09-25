@@ -12,6 +12,7 @@
     "open:android": "npx cap open android",
     "open:ios": "npx cap open ios",
     "generate:keystore": "./scripts/generate-keystore.sh",
+    "appwrite:migrate": "node scripts/migrate-appwrite.mjs",
     "lint": "oxlint",
     "preview": "vite preview"
   },

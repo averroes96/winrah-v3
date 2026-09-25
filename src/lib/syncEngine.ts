@@ -9,6 +9,7 @@ import {
   isAppwriteConfigured,
   pushRecordsToAppwrite,
   pullRecordsFromAppwrite,
+  SyncProgressCallback,
 } from './appwriteClient';
 
 export interface SyncEngineStatus {
@@ -91,7 +92,7 @@ class SyncEngine {
   }
 
   // Main Sync Execution: PUSH dirty changes, then PULL updates
-  async syncNow(): Promise<{ pushed: number; pulled: number; conflicts: number }> {
+  async syncNow(onProgress?: SyncProgressCallback): Promise<{ pushed: number; pulled: number; conflicts: number }> {
     if (!this.isOnlineState || this.isSyncing) {
       return { pushed: 0, pulled: 0, conflicts: 0 };
     }
@@ -106,10 +107,13 @@ class SyncEngine {
 
       if (isAppwriteConfigured()) {
         // Appwrite Live Sync
-        const pushResult = await pushRecordsToAppwrite();
+        const pushResult = await pushRecordsToAppwrite(false, onProgress);
         pushed = pushResult.pushed;
+        if (pushResult.errors > 0 && pushResult.pushed === 0 && pushResult.lastError) {
+          throw new Error(pushResult.lastError);
+        }
 
-        const pullResult = await pullRecordsFromAppwrite();
+        const pullResult = await pullRecordsFromAppwrite(onProgress);
         pulled = pullResult.pulled;
       } else {
         // Local Simulator Mode
@@ -158,6 +162,42 @@ class SyncEngine {
       });
 
       return { pushed, pulled, conflicts };
+    } finally {
+      this.isSyncing = false;
+      this.notify();
+    }
+  }
+
+  // Push ALL local records to Appwrite server
+  async pushAllToAppwrite(onProgress?: SyncProgressCallback): Promise<{ pushed: number; errors: number }> {
+    if (!this.isOnlineState || this.isSyncing) {
+      throw new Error('Connexion réseau indisponible ou synchronisation en cours.');
+    }
+
+    this.isSyncing = true;
+    this.notify();
+
+    try {
+      const res = await pushRecordsToAppwrite(true, onProgress);
+      if (res.errors > 0 && res.pushed === 0 && res.lastError) {
+        throw new Error(res.lastError);
+      }
+
+      const now = new Date().toISOString();
+      localStorage.setItem('winrah_last_synced_at', now);
+
+      await db.putRaw('sync_logs', {
+        id: 'push-all-' + Date.now(),
+        device_id: localStorage.getItem('winrah_device_id') || 'dev-local-01',
+        direction: 'appwrite_cloud',
+        records_pushed: res.pushed,
+        records_pulled: 0,
+        conflicts: 0,
+        started_at: now,
+        completed_at: now,
+      });
+
+      return res;
     } finally {
       this.isSyncing = false;
       this.notify();

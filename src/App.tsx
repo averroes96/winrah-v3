@@ -88,7 +88,7 @@ export function App() {
     await db.init();
 
     // One-time purge of previous local DB content to ensure clean BASE warehouse
-    const DB_RESET_KEY = 'winrah_reset_clean_base_v3';
+    const DB_RESET_KEY = 'winrah_reset_clean_base_v4';
     if (!localStorage.getItem(DB_RESET_KEY)) {
       localStorage.setItem(DB_RESET_KEY, 'true');
       isSeedingRef.current = true;

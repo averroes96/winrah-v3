@@ -1,22 +1,59 @@
-# Guide de Configuration Appwrite Database pour WINRAH
+# Guide de Configuration & Migration Appwrite Database pour WINRAH
 
-Ce guide vous permet de connecter WINRAH à votre instance **Appwrite** (Appwrite Cloud ou Auto-hébergé / Self-hosted).
-
----
-
-## 1. Création du Projet & de la Base de Données
-
-1. Rendez-vous sur votre console Appwrite (ex: [cloud.appwrite.io](https://cloud.appwrite.io) ou votre instance Docker).
-2. Créez un nouveau projet (ex: **WINRAH**).
-3. Notez le **Project ID** généré.
-4. Rendez-vous dans le menu **Databases** et créez une nouvelle base de données :
-   - **Database ID** : `winrah_db` (ou l'identifiant de votre choix).
+Ce guide explique comment structurer et migrer le schéma de base de données WINRAH vers **Appwrite** (Cloud ou Auto-hébergé Docker), et comment les utilisateurs peuvent récupérer la base en 1 clic.
 
 ---
 
-## 2. Création des Collections & Attributs
+## ⚡ Méthode 1 : Migration Automatique (Recommandée)
 
-Dans la base `winrah_db`, créez les 6 collections suivantes et autorisez les permissions d'accès (ex: Rôle `Any` ou `Users` en Lecture/Écriture) :
+Un script de migration automatisé est inclus dans le projet. Il crée la base de données, les 6 collections, tous les attributs typés et les index de performance en une seule commande.
+
+### 1. Obtenir une Clé API Appwrite
+1. Dans votre console Appwrite, rendez-vous dans : **Votre Projet -> Paramètres (Settings) -> Clés API (API Keys)**.
+2. Cliquez sur **Créer une clé API**.
+3. Donnez-lui un nom (ex: `WINRAH Migration`) et activez les permissions (scopes) suivantes :
+   - `databases.write`
+   - `collections.write`
+   - `attributes.write`
+   - `indexes.write`
+4. Copiez la clé API générée.
+
+### 2. Configurer le fichier `.env`
+À la racine du projet, éditez le fichier `.env` :
+```env
+VITE_APPWRITE_ENDPOINT=https://cloud.appwrite.io/v1
+VITE_APPWRITE_PROJECT_ID=votre_project_id
+VITE_APPWRITE_DATABASE_ID=winrah_db
+APPWRITE_API_KEY=votre_cle_api_secrete
+```
+
+### 3. Lancer la migration
+Exécutez simplement la commande suivante dans votre terminal :
+```bash
+npm run appwrite:migrate
+```
+Le script va créer automatiquement :
+- La base de données `winrah_db`
+- Les collections `warehouses`, `areas`, `sections`, `models`, `model_sections`, `transfers`
+- L'ensemble des 45+ attributs typés (String, Integer, Float) avec leurs contraintes
+- Les index de recherche rapide (notamment sur `reference_code` et `warehouse_id`)
+
+---
+
+## 🛠️ Méthode 2 : Déploiement via Appwrite CLI
+
+Le fichier [`appwrite.json`](file:///Users/admin/Github/winrah-v3/appwrite.json) est présent à la racine du projet. Si vous utilisez la CLI officielle Appwrite :
+```bash
+appwrite login
+appwrite init project
+appwrite deploy collection
+```
+
+---
+
+## 🖐️ Méthode 3 : Création Manuelle dans la Console Appwrite
+
+Si vous préférez créer les collections manuellement :
 
 ### Collection 1 : `warehouses`
 | Attribut | Type | Requis | Taille |
@@ -84,16 +121,16 @@ Dans la base `winrah_db`, créez les 6 collections suivantes et autorisez les pe
 | `from_section_id` | String | Non | 36 |
 | `to_section_id` | String | Oui | 36 |
 | `device_id` | String | Oui | 64 |
-| `performed_by` | String | Oui | 255 |
+| `performed_by` | String | Non | 255 |
 | `sync_status` | String | Oui | 20 |
 | `created_at` | String | Oui | 64 |
 
 ---
 
-## 3. Configuration dans WINRAH
+## 📲 Utilisation Côté Client : Récupération en 1 Clic
 
-Ouvrez l'onglet **Synchronisation** dans l'application WINRAH :
-1. **Endpoint** : `https://cloud.appwrite.io/v1` (ou votre adresse `http://192.168.x.x/v1`)
-2. **Project ID** : Votre ID de projet Appwrite
-3. **Database ID** : `winrah_db`
-4. Cliquez sur **Tester la connexion** puis sur **Enregistrer configuration**.
+Puisque les variables `VITE_APPWRITE_ENDPOINT`, `VITE_APPWRITE_PROJECT_ID` et `VITE_APPWRITE_DATABASE_ID` sont désormais compilées directement avec l'application dans `.env` :
+
+1. L'utilisateur ouvre l'onglet **Synchronisation**.
+2. Il clique simplement sur le bouton vert **"Télécharger base serveur"**.
+3. L'application télécharge instantanément l'intégralité des entrepôts, zones, rayons, modèles et transferts du serveur et met à jour la base locale IndexedDB sans aucune manipulation technique.

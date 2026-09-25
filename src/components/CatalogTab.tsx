@@ -228,10 +228,22 @@ export const CatalogTab: React.FC<CatalogTabProps> = ({
     e.preventDefault();
     if (!newAreaName.trim() || !activeWarehouse) return;
 
+    const trimmedName = newAreaName.trim();
+    const existingArea = areas.find(
+      (a) => a.warehouse_id === activeWarehouse.id && a.name.toLowerCase() === trimmedName.toLowerCase()
+    );
+    if (existingArea) {
+      alert(`Une zone nommée "${trimmedName}" existe déjà dans cet entrepôt.`);
+      return;
+    }
+
+    const areaSlug = trimmedName.toLowerCase().replace(/[^a-z0-9]/g, '-');
+    const areaId = `area-${areaSlug}`;
+
     await db.put('areas', {
-      id: 'area-' + Date.now(),
+      id: areaId,
       warehouse_id: activeWarehouse.id,
-      name: newAreaName.trim(),
+      name: trimmedName,
       status: 'active',
       created_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
@@ -251,12 +263,24 @@ export const CatalogTab: React.FC<CatalogTabProps> = ({
     if (!targetAreaId || !newSectionName.trim()) return;
 
     const count = parseInt(bulkSectionCount, 10) || 1;
+    const existingInArea = new Set(
+      sections
+        .filter((s) => s.area_id === targetAreaId)
+        .map((s) => s.name.toLowerCase())
+    );
 
+    let createdCount = 0;
     for (let i = 1; i <= count; i++) {
       const name = count > 1 ? `${newSectionName.trim()}-${i.toString().padStart(2, '0')}` : newSectionName.trim();
+      if (existingInArea.has(name.toLowerCase())) {
+        continue; // Skip duplicate section names
+      }
+
+      const secSlug = name.toLowerCase().replace(/[^a-z0-9]/g, '-');
+      const secId = `sec-${targetAreaId.replace(/^area-/, '')}-${secSlug}`;
 
       await db.put('sections', {
-        id: 'sec-' + Date.now() + '-' + i,
+        id: secId,
         area_id: targetAreaId,
         name,
         capacity: newSectionCapacity.trim() || null,
@@ -267,6 +291,13 @@ export const CatalogTab: React.FC<CatalogTabProps> = ({
         is_dirty: true,
         local_sync_status: 'pending',
       });
+      existingInArea.add(name.toLowerCase());
+      createdCount++;
+    }
+
+    if (createdCount === 0) {
+      alert('Toutes les sections spécifiées existent déjà dans cette zone.');
+      return;
     }
 
     setNewSectionName('');

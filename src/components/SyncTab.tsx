@@ -13,22 +13,19 @@ import {
   CheckCircle2,
   Clock,
   ShieldCheck,
-  Settings,
   Sparkles,
   ArrowRight,
   GitMerge,
-  ExternalLink,
+  CloudDownload,
+  CloudUpload,
+  Trash2,
 } from 'lucide-react';
 import { syncEngine, SyncEngineStatus } from '../lib/syncEngine';
 import { db } from '../db/indexedDb';
 import { SyncQueueItem, SyncLog } from '../types';
+import { initBaseWarehouse } from '../db/seedData';
 
-
-import {
-  getAppwriteConfig,
-  saveAppwriteConfig,
-  testAppwriteConnection,
-} from '../lib/appwriteClient';
+import { fetchServerDatabase, SyncProgressUpdate } from '../lib/appwriteClient';
 
 interface SyncTabProps {
   onOpenDevicePairing: () => void;
@@ -51,13 +48,11 @@ export const SyncTab: React.FC<SyncTabProps> = ({
   const [conflicts, setConflicts] = useState<SyncQueueItem[]>([]);
   const [syncLogs, setSyncLogs] = useState<SyncLog[]>([]);
 
-  const initialCfg = getAppwriteConfig();
-  const [appwriteEndpoint, setAppwriteEndpoint] = useState(initialCfg.endpoint);
-  const [appwriteProjectId, setAppwriteProjectId] = useState(initialCfg.projectId);
-  const [appwriteDatabaseId, setAppwriteDatabaseId] = useState(initialCfg.databaseId);
-  const [isSavedAppwrite, setIsSavedAppwrite] = useState(false);
-  const [isTestingAppwrite, setIsTestingAppwrite] = useState(false);
-  const [testResult, setTestResult] = useState<{ success: boolean; message: string } | null>(null);
+  const [isFetchingServer, setIsFetchingServer] = useState(false);
+  const [isPushingServer, setIsPushingServer] = useState(false);
+  const [isDeduplicating, setIsDeduplicating] = useState(false);
+  const [syncProgress, setSyncProgress] = useState<SyncProgressUpdate | null>(null);
+  const [statusFeedback, setStatusFeedback] = useState<{ success: boolean; text: string } | null>(null);
 
   useEffect(() => {
     loadData();
@@ -73,9 +68,88 @@ export const SyncTab: React.FC<SyncTabProps> = ({
   };
 
   const handleSyncNow = async () => {
-    await syncEngine.syncNow();
-    await loadData();
-    onRefreshData();
+    setStatusFeedback(null);
+    try {
+      const res = await syncEngine.syncNow((p) => setSyncProgress(p));
+      await db.deduplicateLocalDatabase();
+      if (res.pushed === 0 && res.pulled === 0) {
+        setStatusFeedback({
+          success: true,
+          text: 'Synchronisation terminée : Base locale et serveur déjà synchronisés et résolus sans doublon.',
+        });
+      } else {
+        setStatusFeedback({
+          success: true,
+          text: `Synchronisation réussie ! ${res.pushed} envoyés vers le serveur, ${res.pulled} reçus et résolus.${res.conflicts > 0 ? ` (${res.conflicts} conflits détectés)` : ''}`,
+        });
+      }
+      await loadData();
+      onRefreshData();
+    } catch (err: any) {
+      setStatusFeedback({
+        success: false,
+        text: `Erreur de synchronisation : ${err.message || err}`,
+      });
+    } finally {
+      setSyncProgress(null);
+    }
+  };
+
+  const handleDeduplicateLocalDb = async () => {
+    setIsDeduplicating(true);
+    setStatusFeedback(null);
+    try {
+      const res = await db.deduplicateLocalDatabase();
+      const totalRemoved =
+        res.modelsRemoved +
+        res.sectionsRemoved +
+        res.areasRemoved +
+        res.warehousesRemoved +
+        res.assignmentsRemoved;
+
+      if (totalRemoved === 0) {
+        setStatusFeedback({
+          success: true,
+          text: 'Aucun doublon détecté : la base locale est parfaitement saine et canonique.',
+        });
+      } else {
+        setStatusFeedback({
+          success: true,
+          text: `Résolution terminée : ${res.modelsRemoved} doublons de modèles éliminés, ${res.sectionsRemoved} rayons fusionnés, ${res.assignmentsRemoved} assignations dédupliquées.`,
+        });
+      }
+      await loadData();
+      onRefreshData();
+    } catch (err: any) {
+      setStatusFeedback({
+        success: false,
+        text: `Erreur lors de la résolution des doublons : ${err.message || err}`,
+      });
+    } finally {
+      setIsDeduplicating(false);
+    }
+  };
+
+  const handlePushAllLocalDb = async () => {
+    setIsPushingServer(true);
+    setStatusFeedback(null);
+    try {
+      const res = await syncEngine.pushAllToAppwrite((p) => setSyncProgress(p));
+      setStatusFeedback({
+        success: true,
+        text: `Base locale envoyée vers Appwrite avec succès ! ${res.pushed} éléments enregistrés sur le serveur.`,
+      });
+      await loadData();
+      onRefreshData();
+    } catch (err: any) {
+      setStatusFeedback({
+        success: false,
+        text: `Erreur lors de l'envoi vers le serveur : ${err.message || err}`,
+      });
+    } finally {
+      setIsPushingServer(false);
+      setSyncProgress(null);
+    }
   };
 
   const handleSimulateConflict = async () => {
@@ -93,29 +167,40 @@ export const SyncTab: React.FC<SyncTabProps> = ({
     onRefreshData();
   };
 
-  const handleSaveAppwriteConfig = (e?: React.FormEvent) => {
-    if (e) e.preventDefault();
-    saveAppwriteConfig({
-      endpoint: appwriteEndpoint,
-      projectId: appwriteProjectId,
-      databaseId: appwriteDatabaseId,
-    });
-    setIsSavedAppwrite(true);
-    setTimeout(() => setIsSavedAppwrite(false), 2500);
-    syncEngine.syncNow();
-  };
-
-  const handleTestAppwrite = async () => {
-    handleSaveAppwriteConfig();
-    setIsTestingAppwrite(true);
-    setTestResult(null);
+  const handleFetchServerDb = async () => {
+    setIsFetchingServer(true);
+    setStatusFeedback(null);
     try {
-      const res = await testAppwriteConnection();
-      setTestResult(res);
+      const res = await fetchServerDatabase(true, (p) => setSyncProgress(p));
+      setStatusFeedback({
+        success: true,
+        text: `Base serveur téléchargée avec succès ! ${res.total} enregistrements chargés (${res.models} modèles, ${res.sections} rayons, ${res.warehouses} entrepôts).`,
+      });
+      await loadData();
+      onRefreshData();
+    } catch (err: any) {
+      setStatusFeedback({
+        success: false,
+        text: `Erreur lors du téléchargement : ${err.message || err}`,
+      });
     } finally {
-      setIsTestingAppwrite(false);
+      setIsFetchingServer(false);
+      setSyncProgress(null);
     }
   };
+
+  const handleClearLocalDb = async () => {
+    if (window.confirm('Supprimer l’intégralité des données locales ?\nCette action va vider IndexedDB et réinitialiser un entrepôt BASE propre.')) {
+      await initBaseWarehouse();
+      setStatusFeedback({
+        success: true,
+        text: 'Base de données locale vidée avec succès. Entrepôt BASE vierge réinitialisé.',
+      });
+      await loadData();
+      onRefreshData();
+    }
+  };
+
 
   return (
     <div className="fade-in">
@@ -167,8 +252,68 @@ export const SyncTab: React.FC<SyncTabProps> = ({
           </div>
         </div>
 
-        {/* Action Buttons: Sync Now & Device-to-Device QR */}
+        {/* Action Buttons: 1-Click Server DB Fetch, Push Local to Server, Sync Now & QR */}
         <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
+          <button
+            type="button"
+            onClick={handlePushAllLocalDb}
+            disabled={isPushingServer || !status.isOnline}
+            className="btn"
+            style={{
+              gap: '0.45rem',
+              fontSize: '0.85rem',
+              background: '#2563eb',
+              color: '#ffffff',
+              border: 'none',
+              padding: '0.55rem 0.9rem',
+              fontWeight: 700,
+            }}
+            title="Envoyer l'intégralité des données locales vers le serveur Appwrite"
+          >
+            <CloudUpload size={16} className={isPushingServer ? 'animate-spin' : ''} />
+            <span>{isPushingServer ? 'Envoi...' : 'Envoyer base locale'}</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={handleFetchServerDb}
+            disabled={isFetchingServer || !status.isOnline}
+            className="btn"
+            style={{
+              gap: '0.45rem',
+              fontSize: '0.85rem',
+              background: '#059669',
+              color: '#ffffff',
+              border: 'none',
+              padding: '0.55rem 0.9rem',
+              fontWeight: 700,
+            }}
+            title="Télécharger l'ensemble des données du serveur Appwrite dans la base locale avec déduplication intégrale"
+          >
+            <CloudDownload size={16} className={isFetchingServer ? 'animate-spin' : ''} />
+            <span>{isFetchingServer ? 'Téléchargement...' : 'Télécharger base serveur'}</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={handleDeduplicateLocalDb}
+            disabled={isDeduplicating}
+            className="btn"
+            style={{
+              gap: '0.45rem',
+              fontSize: '0.85rem',
+              background: '#7c3aed',
+              color: '#ffffff',
+              border: 'none',
+              padding: '0.55rem 0.9rem',
+              fontWeight: 700,
+            }}
+            title="Résoudre, fusionner et éliminer automatiquement tous les doublons de la base locale"
+          >
+            <CheckCircle2 size={16} className={isDeduplicating ? 'animate-spin' : ''} />
+            <span>{isDeduplicating ? 'Résolution...' : 'Résoudre doublons'}</span>
+          </button>
+
           <button
             type="button"
             onClick={onOpenDevicePairing}
@@ -192,6 +337,78 @@ export const SyncTab: React.FC<SyncTabProps> = ({
           </button>
         </div>
       </div>
+
+      {syncProgress && (
+        <div
+          className="fade-in"
+          style={{
+            padding: '1rem',
+            borderRadius: 'var(--radius-md)',
+            marginBottom: '1rem',
+            background: 'var(--surface-color)',
+            border: '1px solid var(--primary-light)',
+            boxShadow: '0 4px 12px rgba(0, 0, 0, 0.05)',
+          }}
+        >
+          <div
+            style={{
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              marginBottom: '0.5rem',
+            }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontWeight: 600, fontSize: '0.85rem' }}>
+              <RefreshCw size={15} className="animate-spin" style={{ color: 'var(--primary-color)' }} />
+              <span>{syncProgress.message}</span>
+            </div>
+            <span style={{ fontSize: '0.82rem', fontWeight: 700, color: 'var(--primary-color)' }}>
+              {syncProgress.percentage}%
+            </span>
+          </div>
+          <div
+            style={{
+              width: '100%',
+              height: '8px',
+              backgroundColor: 'rgba(0, 0, 0, 0.08)',
+              borderRadius: '999px',
+              overflow: 'hidden',
+            }}
+          >
+            <div
+              style={{
+                width: `${syncProgress.percentage}%`,
+                height: '100%',
+                backgroundColor: 'var(--primary-color)',
+                borderRadius: '999px',
+                transition: 'width 0.25s ease',
+              }}
+            />
+          </div>
+        </div>
+      )}
+
+      {statusFeedback && (
+        <div
+          className="fade-in"
+          style={{
+            padding: '0.85rem 1rem',
+            borderRadius: 'var(--radius-md)',
+            marginBottom: '1rem',
+            background: statusFeedback.success ? 'rgba(16, 185, 129, 0.12)' : 'rgba(239, 68, 68, 0.12)',
+            color: statusFeedback.success ? '#059669' : '#b91c1c',
+            border: `1px solid ${statusFeedback.success ? 'rgba(16, 185, 129, 0.3)' : 'rgba(239, 68, 68, 0.3)'}`,
+            fontSize: '0.82rem',
+            fontWeight: 700,
+            display: 'flex',
+            alignItems: 'center',
+            gap: '0.5rem',
+          }}
+        >
+          {statusFeedback.success ? <CheckCircle2 size={18} /> : <AlertTriangle size={18} />}
+          <span>{statusFeedback.text}</span>
+        </div>
+      )}
 
       {/* Conflict Resolution Center (FR-7.6) */}
       {conflicts.length > 0 ? (
@@ -346,119 +563,50 @@ export const SyncTab: React.FC<SyncTabProps> = ({
         </div>
       )}
 
-      {/* Appwrite Database Live Configuration */}
-      <div className="card" style={{ padding: '1.25rem', marginBottom: '1rem' }}>
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '0.5rem', marginBottom: '1rem' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-            <Settings size={18} style={{ color: 'var(--accent)' }} />
-            <h3 style={{ fontSize: '1rem', fontWeight: 800 }}>
-              Connexion Appwrite Database (Cloud ou Auto-hébergé)
-            </h3>
+      {/* Maintenance / Danger Zone: Reset Local Database */}
+      <div
+        className="card"
+        style={{
+          padding: '1rem 1.25rem',
+          marginBottom: '1rem',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          flexWrap: 'wrap',
+          gap: '0.75rem',
+          background: 'rgba(239, 68, 68, 0.05)',
+          border: '1px dashed rgba(239, 68, 68, 0.3)',
+        }}
+      >
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem' }}>
+          <Trash2 size={18} style={{ color: 'var(--danger)' }} />
+          <div>
+            <div style={{ fontWeight: 700, fontSize: '0.88rem', color: 'var(--danger)' }}>
+              Zone de maintenance : Vider la base locale
+            </div>
+            <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
+              Supprime tous les modèles, rayons et transferts de l'appareil et recrée un entrepôt BASE vierge
+            </div>
           </div>
-          <span
-            style={{
-              fontSize: '0.72rem',
-              fontWeight: 700,
-              padding: '0.2rem 0.6rem',
-              borderRadius: 'var(--radius-full)',
-              background: status.mode === 'appwrite' ? 'rgba(16, 185, 129, 0.15)' : 'var(--bg-input)',
-              color: status.mode === 'appwrite' ? '#059669' : 'var(--text-muted)',
-            }}
-          >
-            {status.mode === 'appwrite' ? '● Mode Appwrite Actif' : '○ Mode Simulateur Local'}
-          </span>
         </div>
 
-        <p style={{ fontSize: '0.78rem', color: 'var(--text-muted)', marginBottom: '1rem' }}>
-          Par défaut, WINRAH fonctionne à 100% hors-ligne avec IndexedDB. Si vous possédez un serveur
-          Appwrite (Cloud ou Docker auto-hébergé), renseignez vos identifiants pour synchroniser
-          vos modèles, rayons et transferts. (Consultez <code style={{ color: 'var(--accent-dark)' }}>/appwrite/APPWRITE_GUIDE.md</code>).
-        </p>
-
-        <form onSubmit={handleSaveAppwriteConfig} style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
-          <div>
-            <label style={{ display: 'block', fontSize: '0.78rem', fontWeight: 700, marginBottom: '0.25rem' }}>
-              Appwrite API Endpoint :
-            </label>
-            <input
-              type="text"
-              className="input-control"
-              placeholder="https://cloud.appwrite.io/v1 ou http://192.168.1.50/v1"
-              value={appwriteEndpoint}
-              onChange={(e) => setAppwriteEndpoint(e.target.value)}
-            />
-            <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>
-              Par défaut : https://cloud.appwrite.io/v1
-            </span>
-          </div>
-
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '0.75rem' }}>
-            <div>
-              <label style={{ display: 'block', fontSize: '0.78rem', fontWeight: 700, marginBottom: '0.25rem' }}>
-                Project ID :
-              </label>
-              <input
-                type="text"
-                className="input-control"
-                placeholder="ex: winrah-project ou 673abc123..."
-                value={appwriteProjectId}
-                onChange={(e) => setAppwriteProjectId(e.target.value)}
-              />
-            </div>
-
-            <div>
-              <label style={{ display: 'block', fontSize: '0.78rem', fontWeight: 700, marginBottom: '0.25rem' }}>
-                Database ID :
-              </label>
-              <input
-                type="text"
-                className="input-control"
-                placeholder="winrah_db"
-                value={appwriteDatabaseId}
-                onChange={(e) => setAppwriteDatabaseId(e.target.value)}
-              />
-            </div>
-          </div>
-
-          {testResult && (
-            <div
-              style={{
-                padding: '0.65rem 0.85rem',
-                borderRadius: 'var(--radius-md)',
-                fontSize: '0.78rem',
-                fontWeight: 600,
-                background: testResult.success ? 'rgba(16, 185, 129, 0.12)' : 'rgba(239, 68, 68, 0.12)',
-                color: testResult.success ? '#059669' : '#b91c1c',
-                border: `1px solid ${testResult.success ? 'rgba(16, 185, 129, 0.25)' : 'rgba(239, 68, 68, 0.25)'}`,
-              }}
-            >
-              {testResult.message}
-            </div>
-          )}
-
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginTop: '0.25rem', flexWrap: 'wrap' }}>
-            <button
-              type="button"
-              onClick={handleTestAppwrite}
-              disabled={isTestingAppwrite || !appwriteProjectId.trim()}
-              className="btn btn-secondary"
-              style={{ padding: '0.5rem 1rem', fontSize: '0.82rem' }}
-            >
-              {isTestingAppwrite ? 'Test en cours...' : 'Tester la connexion'}
-            </button>
-
-            <button type="submit" className="btn btn-primary" style={{ padding: '0.5rem 1rem', fontSize: '0.82rem' }}>
-              Enregistrer configuration
-            </button>
-
-            {isSavedAppwrite && (
-              <span style={{ fontSize: '0.8rem', color: 'var(--success)', fontWeight: 700 }}>
-                ✓ Configuration enregistrée !
-              </span>
-            )}
-          </div>
-        </form>
+        <button
+          type="button"
+          onClick={handleClearLocalDb}
+          className="btn"
+          style={{
+            padding: '0.45rem 0.9rem',
+            fontSize: '0.8rem',
+            background: 'var(--danger)',
+            color: '#ffffff',
+            border: 'none',
+            fontWeight: 700,
+          }}
+        >
+          Vider la base locale
+        </button>
       </div>
+
 
       {/* Sync Audit History */}
       <div className="card" style={{ padding: '1.25rem' }}>

@@ -1,0 +1,164 @@
+{
+  "projectId": "",
+  "projectName": "WINRAH",
+  "databases": [
+    {
+      "$id": "winrah_db",
+      "name": "WINRAH Database",
+      "enabled": true,
+      "collections": [
+        {
+          "$id": "warehouses",
+          "name": "Warehouses",
+          "$permissions": [
+            "read(\"any\")",
+            "create(\"any\")",
+            "update(\"any\")",
+            "delete(\"any\")"
+          ],
+          "documentSecurity": false,
+          "enabled": true,
+          "attributes": [
+            { "key": "id", "type": "string", "status": "available", "required": true, "array": false, "size": 36 },
+            { "key": "name", "type": "string", "status": "available", "required": true, "array": false, "size": 255 },
+            { "key": "status", "type": "string", "status": "available", "required": true, "array": false, "size": 20 },
+            { "key": "version", "type": "integer", "status": "available", "required": true, "array": false },
+            { "key": "created_at", "type": "string", "status": "available", "required": true, "array": false, "size": 64 },
+            { "key": "updated_at", "type": "string", "status": "available", "required": true, "array": false, "size": 64 }
+          ],
+          "indexes": [
+            { "key": "idx_wh_status", "type": "key", "status": "available", "attributes": ["status"] }
+          ]
+        },
+        {
+          "$id": "areas",
+          "name": "Areas",
+          "$permissions": [
+            "read(\"any\")",
+            "create(\"any\")",
+            "update(\"any\")",
+            "delete(\"any\")"
+          ],
+          "documentSecurity": false,
+          "enabled": true,
+          "attributes": [
+            { "key": "id", "type": "string", "status": "available", "required": true, "array": false, "size": 36 },
+            { "key": "warehouse_id", "type": "string", "status": "available", "required": true, "array": false, "size": 36 },
+            { "key": "name", "type": "string", "status": "available", "required": true, "array": false, "size": 255 },
+            { "key": "status", "type": "string", "status": "available", "required": true, "array": false, "size": 20 },
+            { "key": "version", "type": "integer", "status": "available", "required": true, "array": false },
+            { "key": "created_at", "type": "string", "status": "available", "required": true, "array": false, "size": 64 },
+            { "key": "updated_at", "type": "string", "status": "available", "required": true, "array": false, "size": 64 }
+          ],
+          "indexes": [
+            { "key": "idx_areas_wh", "type": "key", "status": "available", "attributes": ["warehouse_id"] }
+          ]
+        },
+        {
+          "$id": "sections",
+          "name": "Sections",
+          "$permissions": [
+            "read(\"any\")",
+            "create(\"any\")",
+            "update(\"any\")",
+            "delete(\"any\")"
+          ],
+          "documentSecurity": false,
+          "enabled": true,
+          "attributes": [
+            { "key": "id", "type": "string", "status": "available", "required": true, "array": false, "size": 36 },
+            { "key": "area_id", "type": "string", "status": "available", "required": true, "array": false, "size": 36 },
+            { "key": "name", "type": "string", "status": "available", "required": true, "array": false, "size": 255 },
+            { "key": "capacity", "type": "string", "status": "available", "required": false, "array": false, "size": 255 },
+            { "key": "status", "type": "string", "status": "available", "required": true, "array": false, "size": 20 },
+            { "key": "version", "type": "integer", "status": "available", "required": true, "array": false },
+            { "key": "created_at", "type": "string", "status": "available", "required": true, "array": false, "size": 64 },
+            { "key": "updated_at", "type": "string", "status": "available", "required": true, "array": false, "size": 64 }
+          ],
+          "indexes": [
+            { "key": "idx_sections_area", "type": "key", "status": "available", "attributes": ["area_id"] }
+          ]
+        },
+        {
+          "$id": "models",
+          "name": "Models",
+          "$permissions": [
+            "read(\"any\")",
+            "create(\"any\")",
+            "update(\"any\")",
+            "delete(\"any\")"
+          ],
+          "documentSecurity": false,
+          "enabled": true,
+          "attributes": [
+            { "key": "id", "type": "string", "status": "available", "required": true, "array": false, "size": 36 },
+            { "key": "warehouse_id", "type": "string", "status": "available", "required": true, "array": false, "size": 36 },
+            { "key": "reference_code", "type": "string", "status": "available", "required": true, "array": false, "size": 64 },
+            { "key": "name", "type": "string", "status": "available", "required": false, "array": false, "size": 255 },
+            { "key": "size_range", "type": "string", "status": "available", "required": false, "array": false, "size": 64 },
+            { "key": "price", "type": "double", "status": "available", "required": false, "array": false },
+            { "key": "photo_url", "type": "string", "status": "available", "required": false, "array": false, "size": 1000 },
+            { "key": "status", "type": "string", "status": "available", "required": true, "array": false, "size": 20 },
+            { "key": "version", "type": "integer", "status": "available", "required": true, "array": false },
+            { "key": "created_at", "type": "string", "status": "available", "required": true, "array": false, "size": 64 },
+            { "key": "updated_at", "type": "string", "status": "available", "required": true, "array": false, "size": 64 }
+          ],
+          "indexes": [
+            { "key": "idx_models_ref", "type": "key", "status": "available", "attributes": ["reference_code"] },
+            { "key": "idx_models_wh", "type": "key", "status": "available", "attributes": ["warehouse_id"] }
+          ]
+        },
+        {
+          "$id": "model_sections",
+          "name": "Model Sections",
+          "$permissions": [
+            "read(\"any\")",
+            "create(\"any\")",
+            "update(\"any\")",
+            "delete(\"any\")"
+          ],
+          "documentSecurity": false,
+          "enabled": true,
+          "attributes": [
+            { "key": "id", "type": "string", "status": "available", "required": true, "array": false, "size": 36 },
+            { "key": "model_id", "type": "string", "status": "available", "required": true, "array": false, "size": 36 },
+            { "key": "section_id", "type": "string", "status": "available", "required": true, "array": false, "size": 36 },
+            { "key": "assigned_at", "type": "string", "status": "available", "required": true, "array": false, "size": 64 },
+            { "key": "updated_at", "type": "string", "status": "available", "required": true, "array": false, "size": 64 },
+            { "key": "version", "type": "integer", "status": "available", "required": true, "array": false }
+          ],
+          "indexes": [
+            { "key": "idx_ms_model", "type": "key", "status": "available", "attributes": ["model_id"] },
+            { "key": "idx_ms_sec", "type": "key", "status": "available", "attributes": ["section_id"] }
+          ]
+        },
+        {
+          "$id": "transfers",
+          "name": "Transfers",
+          "$permissions": [
+            "read(\"any\")",
+            "create(\"any\")",
+            "update(\"any\")",
+            "delete(\"any\")"
+          ],
+          "documentSecurity": false,
+          "enabled": true,
+          "attributes": [
+            { "key": "id", "type": "string", "status": "available", "required": true, "array": false, "size": 36 },
+            { "key": "model_id", "type": "string", "status": "available", "required": true, "array": false, "size": 36 },
+            { "key": "from_section_id", "type": "string", "status": "available", "required": false, "array": false, "size": 36 },
+            { "key": "to_section_id", "type": "string", "status": "available", "required": true, "array": false, "size": 36 },
+            { "key": "device_id", "type": "string", "status": "available", "required": true, "array": false, "size": 64 },
+            { "key": "performed_by", "type": "string", "status": "available", "required": false, "array": false, "size": 255 },
+            { "key": "sync_status", "type": "string", "status": "available", "required": true, "array": false, "size": 20 },
+            { "key": "created_at", "type": "string", "status": "available", "required": true, "array": false, "size": 64 }
+          ],
+          "indexes": [
+            { "key": "idx_tr_model", "type": "key", "status": "available", "attributes": ["model_id"] },
+            { "key": "idx_tr_created", "type": "key", "status": "available", "attributes": ["created_at"] }
+          ]
+        }
+      ]
+    }
+  ]
+}

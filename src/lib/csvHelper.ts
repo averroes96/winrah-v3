@@ -219,8 +219,9 @@ export async function importV2DatabaseToDb(
   const areaNameToId = new Map<string, string>();
   for (const zoneName of v2Data.summary.zones) {
     const cleanZone = zoneName.trim() || 'Zone Principale';
+    const zoneSlug = cleanZone.toLowerCase().replace(/[^a-z0-9]/g, '-').replace(/-+/g, '-').replace(/^-|-$/g, '') || 'def';
     if (!areaNameToId.has(cleanZone.toLowerCase())) {
-      const newAreaId = `area-base-${cleanZone.replace(/\s+/g, '-').toLowerCase()}-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`;
+      const newAreaId = `area-base-${zoneSlug}`;
       const newArea: Area = {
         id: newAreaId,
         warehouse_id: 'wh-base',
@@ -239,7 +240,7 @@ export async function importV2DatabaseToDb(
 
   if (areasToInsert.length === 0) {
     const fallbackArea: Area = {
-      id: `area-base-def-${Date.now()}`,
+      id: 'area-base-zone-principale',
       warehouse_id: 'wh-base',
       name: 'Zone Principale',
       status: 'active',
@@ -259,7 +260,7 @@ export async function importV2DatabaseToDb(
     const zoneKey = (v2Sec.zoneName || 'Zone Principale').toLowerCase();
     const areaId = areaNameToId.get(zoneKey) || areasToInsert[0].id;
 
-    const sectionId = `sec-v2-${v2Sec.id}-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`;
+    const sectionId = `sec-v2-${v2Sec.id}`;
     const newSection: Section = {
       id: sectionId,
       area_id: areaId,
@@ -278,7 +279,7 @@ export async function importV2DatabaseToDb(
 
   // 5. Create Models and ModelSection assignments
   for (const v2Prod of v2Data.products) {
-    const modelId = `model-v2-${v2Prod.id}-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
+    const modelId = `model-v2-${v2Prod.id}`;
     const model: ShoeModel = {
       id: modelId,
       warehouse_id: 'wh-base',
@@ -299,7 +300,7 @@ export async function importV2DatabaseToDb(
     const v3SectionId = v2SectionIdToV3SectionId.get(v2Prod.sectionId);
     if (v3SectionId) {
       const assignment: ModelSection = {
-        id: `ms-v2-${v2Prod.id}-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
+        id: `ms-v2-${v2Prod.id}-${v2Prod.sectionId}`,
         model_id: modelId,
         section_id: v3SectionId,
         assigned_at: now,
@@ -325,6 +326,9 @@ export async function importV2DatabaseToDb(
   if (modelSectionsToInsert.length > 0) {
     await db.bulkPut('model_sections', modelSectionsToInsert);
   }
+
+  // Automatic deduplication & reconciliation pass
+  await db.deduplicateLocalDatabase();
 
   db.notify();
 
@@ -466,8 +470,9 @@ export async function importStandardCsvToDb(
   // Extract unique areas and sections from CSV rows
   for (const row of validRows) {
     const areaName = (row.area_name || 'Zone Principale').trim();
+    const areaSlug = areaName.toLowerCase().replace(/[^a-z0-9]/g, '-').replace(/-+/g, '-').replace(/^-|-$/g, '') || 'def';
+    const areaId = `area-base-${areaSlug}`;
     if (!areaMap.has(areaName.toLowerCase())) {
-      const areaId = `area-base-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`;
       const newArea: Area = {
         id: areaId,
         warehouse_id: 'wh-base',
@@ -485,9 +490,11 @@ export async function importStandardCsvToDb(
 
     if (row.section_name && row.section_name.trim()) {
       const secName = row.section_name.trim();
-      if (!sectionMap.has(secName.toLowerCase())) {
-        const parentAreaId = areaMap.get(areaName.toLowerCase())!;
-        const secId = `sec-base-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`;
+      const parentAreaId = areaMap.get(areaName.toLowerCase()) || areaId;
+      const secSlug = secName.toLowerCase().replace(/[^a-z0-9]/g, '-').replace(/-+/g, '-').replace(/^-|-$/g, '') || 'def';
+      const secKey = `${parentAreaId}:::${secName.toLowerCase()}`;
+      if (!sectionMap.has(secKey)) {
+        const secId = `sec-${parentAreaId.replace(/^area-/, '')}-${secSlug}`;
         const newSec: Section = {
           id: secId,
           area_id: parentAreaId,
@@ -501,14 +508,16 @@ export async function importStandardCsvToDb(
           local_sync_status: 'synced',
         };
         sectionsToInsert.push(newSec);
-        sectionMap.set(secName.toLowerCase(), secId);
+        sectionMap.set(secKey, secId);
       }
     }
   }
 
   // Insert models and link sections
-  for (const row of validRows) {
-    const modelId = `model-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
+  for (let i = 0; i < validRows.length; i++) {
+    const row = validRows[i];
+    const refSlug = row.reference_code.trim().toLowerCase().replace(/[^a-z0-9]/g, '-').replace(/-+/g, '-').replace(/^-|-$/g, '');
+    const modelId = `model-base-${refSlug}-${i + 1}`;
     const model: ShoeModel = {
       id: modelId,
       warehouse_id: 'wh-base',
@@ -527,10 +536,15 @@ export async function importStandardCsvToDb(
     modelsToInsert.push(model);
 
     if (row.section_name && row.section_name.trim()) {
-      const secId = sectionMap.get(row.section_name.trim().toLowerCase());
+      const secName = row.section_name.trim();
+      const areaName = (row.area_name || 'Zone Principale').trim();
+      const parentAreaId = areaMap.get(areaName.toLowerCase()) || areasToInsert[0]?.id || 'area-base-zone-principale';
+      const secKey = `${parentAreaId}:::${secName.toLowerCase()}`;
+      const secId = sectionMap.get(secKey);
       if (secId) {
+        const secSlug = secName.toLowerCase().replace(/[^a-z0-9]/g, '-').replace(/-+/g, '-').replace(/^-|-$/g, '') || 'def';
         modelSectionsToInsert.push({
-          id: `ms-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
+          id: `ms-${modelId}-${secSlug}`,
           model_id: modelId,
           section_id: secId,
           assigned_at: now,
@@ -555,6 +569,9 @@ export async function importStandardCsvToDb(
   if (modelSectionsToInsert.length > 0) {
     await db.bulkPut('model_sections', modelSectionsToInsert);
   }
+
+  // Automatic deduplication & reconciliation pass
+  await db.deduplicateLocalDatabase();
 
   db.notify();
 
