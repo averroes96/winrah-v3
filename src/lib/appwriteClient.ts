@@ -6,7 +6,7 @@
 
 import { Client, Databases, Query, Account } from 'appwrite';
 import { db } from '../db/indexedDb';
-import { Warehouse, Area, Section, ShoeModel, ModelSection, TransferLog } from '../types';
+import { Warehouse, Area, Section, ShoeModel, ModelSection, TransferLog, SearchLog } from '../types';
 
 export interface AppwriteConfig {
   endpoint: string;
@@ -16,7 +16,7 @@ export interface AppwriteConfig {
 }
 
 export interface SyncProgressUpdate {
-  phase: 'init' | 'warehouses' | 'areas' | 'sections' | 'models' | 'model_sections' | 'transfers' | 'fetching' | 'done';
+  phase: 'init' | 'warehouses' | 'areas' | 'sections' | 'models' | 'model_sections' | 'transfers' | 'search_logs' | 'fetching' | 'done';
   message: string;
   current: number;
   total: number;
@@ -32,6 +32,7 @@ export const APPWRITE_COLLECTIONS = {
   models: 'models',
   model_sections: 'model_sections',
   transfers: 'transfers',
+  search_logs: 'search_logs',
 } as const;
 
 export function getAppwriteConfig(): AppwriteConfig {
@@ -274,6 +275,18 @@ export function sanitizeTransfer(t: TransferLog) {
     performed_by: t.performed_by || 'Opérateur',
     sync_status: 'synced',
     created_at: t.created_at || new Date().toISOString(),
+  };
+}
+
+export function sanitizeSearchLog(log: SearchLog) {
+  return {
+    id: log.id,
+    device_id: log.device_id,
+    query_text: (log.query_text || '').substring(0, 255),
+    result_count: Number(log.result_count) || 0,
+    warehouse_id: log.warehouse_id || null,
+    created_at: log.created_at || new Date().toISOString(),
+    is_everywhere: Boolean(log.is_everywhere),
   };
 }
 
@@ -690,6 +703,7 @@ export async function clearServerDatabase(
   await ensureAppwriteSession(inst.client);
 
   const collections = [
+    APPWRITE_COLLECTIONS.search_logs,
     APPWRITE_COLLECTIONS.transfers,
     APPWRITE_COLLECTIONS.model_sections,
     APPWRITE_COLLECTIONS.models,
@@ -1140,6 +1154,70 @@ export async function pushRecordsToAppwrite(
       if (succeededIds.includes(t.id)) {
         t.sync_status = 'synced';
         await db.putRaw('transfers', t, false);
+      }
+    }
+  }
+
+  // 7. Search Logs (Tracked by timestamp cutoff: logs added after this sync push cutoff aren't pushed in this batch)
+  const syncCutoffTimestamp = new Date().toISOString();
+  const lastSearchLogsSyncedAt = localStorage.getItem('winrah_last_search_logs_synced_at') || null;
+
+  const allSearchLogs = await db.getAll<SearchLog>('search_logs');
+  const searchLogsToPush = forceAll
+    ? allSearchLogs.filter((log) => log.created_at <= syncCutoffTimestamp)
+    : allSearchLogs.filter((log) => {
+        // Must have been created on or before this sync cutoff
+        if (log.created_at > syncCutoffTimestamp) return false;
+        // Must be newer than the last search logs sync cutoff
+        if (lastSearchLogsSyncedAt && log.created_at <= lastSearchLogsSyncedAt) return false;
+        // Must be pending
+        return log.sync_status !== 'synced';
+      });
+
+  if (searchLogsToPush.length > 0) {
+    onProgress?.({
+      phase: 'search_logs',
+      message: `Envoi des logs de recherche (0/${searchLogsToPush.length})...`,
+      current: 0,
+      total: searchLogsToPush.length,
+      percentage: 0,
+    });
+    const succeededIds: string[] = [];
+    await runConcurrentPool(
+      searchLogsToPush,
+      15,
+      async (log) => {
+        try {
+          const docId = toAppwriteDocId(log.id);
+          const payload = sanitizeSearchLog(log);
+          await upsertDocument(APPWRITE_COLLECTIONS.search_logs, docId, payload);
+          succeededIds.push(log.id);
+          totalPushed++;
+        } catch (e: any) {
+          lastError = e?.message || String(e);
+          console.warn('Appwrite push error (search_log):', e);
+          totalErrors++;
+        }
+      },
+      (done, total) => {
+        onProgress?.({
+          phase: 'search_logs',
+          message: `Envoi des logs de recherche (${done}/${total})...`,
+          current: done,
+          total,
+          percentage: Math.round((done / total) * 100),
+        });
+      }
+    );
+
+    // Update timestamp tracking so records created after this push aren't marked as synced or re-sent
+    localStorage.setItem('winrah_last_search_logs_synced_at', syncCutoffTimestamp);
+
+    // Mark pushed search logs as synced in IndexedDB
+    for (const log of searchLogsToPush) {
+      if (succeededIds.includes(log.id)) {
+        log.sync_status = 'synced';
+        await db.putRaw('search_logs', log, false);
       }
     }
   }

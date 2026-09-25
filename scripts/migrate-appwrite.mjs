@@ -193,6 +193,24 @@ const SCHEMA = [
       { key: 'idx_tr_created', type: 'key', attributes: ['created_at'] },
     ],
   },
+  {
+    collectionId: 'search_logs',
+    name: 'Search Logs',
+    attributes: [
+      { key: 'id', type: 'string', size: 36, required: true },
+      { key: 'device_id', type: 'string', size: 64, required: true },
+      { key: 'query_text', type: 'string', size: 255, required: true },
+      { key: 'result_count', type: 'integer', required: true },
+      { key: 'warehouse_id', type: 'string', size: 36, required: false },
+      { key: 'created_at', type: 'string', size: 64, required: true },
+      { key: 'is_everywhere', type: 'boolean', required: false },
+    ],
+    indexes: [
+      { key: 'idx_sl_created', type: 'key', attributes: ['created_at'] },
+      { key: 'idx_sl_device', type: 'key', attributes: ['device_id'] },
+      { key: 'idx_sl_query', type: 'key', attributes: ['query_text'] },
+    ],
+  },
 ];
 
 async function runMigration() {

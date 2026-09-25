@@ -125,6 +125,7 @@ export const SearchTab: React.FC<SearchTabProps> = ({
           query_text: trimmed,
           result_count: searchResults.length,
           is_everywhere: isSearchEverywhere,
+          sync_status: 'pending',
           created_at: new Date().toISOString(),
         });
       }, 700);

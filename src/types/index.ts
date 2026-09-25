@@ -122,6 +122,7 @@ export interface SearchLog {
   filters?: Record<string, any> | null;
   result_count: number;
   is_everywhere: boolean;
+  sync_status?: 'pending' | 'synced';
   created_at: string;
 }
 

@@ -407,7 +407,9 @@ export class LocalDatabase {
     const transfers = (await this.getAll<TransferLog>('transfers')).filter(
       (t) => t.sync_status === 'pending'
     );
-    const search_logs = await this.getAll<SearchLog>('search_logs');
+    const search_logs = (await this.getAll<SearchLog>('search_logs')).filter(
+      (s) => s.sync_status !== 'synced'
+    );
     const audit_logs = await this.getAll<AuditLog>('audit_logs');
 
     return {

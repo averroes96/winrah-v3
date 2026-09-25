@@ -74,7 +74,8 @@ class SyncEngine {
       dirty.sections.length +
       dirty.models.length +
       dirty.model_sections.length +
-      dirty.transfers.length;
+      dirty.transfers.length +
+      dirty.search_logs.length;
 
     const conflicts = await db.getAll<SyncQueueItem>('sync_queue');
     const activeConflicts = conflicts.filter((c) => c.status === 'pending');
