@@ -30,6 +30,7 @@ import { QuickAddModelBottomSheet } from './components/QuickAddModelBottomSheet'
 import { db } from './db/indexedDb';
 import { initBaseWarehouse } from './db/seedData';
 import { syncEngine } from './lib/syncEngine';
+import { useI18n } from './i18n';
 import {
   Warehouse,
   Area,
@@ -45,6 +46,7 @@ import {
 type ActiveTab = 'search' | 'transfers' | 'catalog' | 'sync';
 
 export function App() {
+  const { t } = useI18n();
   const [activeTab, setActiveTab] = useState<ActiveTab>('search');
   const [isQuickAddOpen, setIsQuickAddOpen] = useState(false);
   const [scannerTargetCallback, setScannerTargetCallback] = useState<((code: string) => void) | null>(null);
@@ -328,7 +330,7 @@ export function App() {
           className={`nav-item ${activeTab === 'search' ? 'active' : ''}`}
         >
           <Search size={20} />
-          <span>Trouver</span>
+          <span>{t('nav.search')}</span>
         </button>
 
         <button
@@ -337,7 +339,7 @@ export function App() {
           className={`nav-item ${activeTab === 'transfers' ? 'active' : ''}`}
         >
           <ArrowRightLeft size={20} />
-          <span>Transférer</span>
+          <span>{t('nav.transfers')}</span>
         </button>
 
         {/* Center Prominent Quick Add Model Button */}
@@ -359,7 +361,7 @@ export function App() {
             cursor: 'pointer',
             padding: '0',
           }}
-          title="Ajouter rapidement un modèle"
+          title={t('modal.quick_add.title')}
         >
           <div
             style={{
@@ -385,7 +387,7 @@ export function App() {
               marginTop: '2px',
             }}
           >
-            Ajouter
+            {t('nav.add')}
           </span>
         </button>
 
@@ -395,7 +397,7 @@ export function App() {
           className={`nav-item ${activeTab === 'catalog' ? 'active' : ''}`}
         >
           <Layers size={20} />
-          <span>Structure</span>
+          <span>{t('nav.structure')}</span>
         </button>
 
         <button
@@ -404,7 +406,7 @@ export function App() {
           className={`nav-item ${activeTab === 'sync' ? 'active' : ''}`}
         >
           <Database size={20} />
-          <span>Synchro</span>
+          <span>{t('nav.sync')}</span>
         </button>
       </nav>
 

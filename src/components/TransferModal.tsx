@@ -9,6 +9,7 @@ import { ShoeModel, Section, Area, Warehouse, TransferLog } from '../types';
 import { db } from '../db/indexedDb';
 import confetti from 'canvas-confetti';
 import { SectionSearchSelect } from './SectionSearchSelect';
+import { useI18n } from '../i18n';
 
 interface TransferModalProps {
   model: ShoeModel | null;
@@ -29,6 +30,7 @@ export const TransferModal: React.FC<TransferModalProps> = ({
   onSuccess,
   onClose,
 }) => {
+  const { t } = useI18n();
   const [toSectionId, setToSectionId] = useState('');
   const [operator, setOperator] = useState('Opérateur');
 
@@ -164,7 +166,7 @@ export const TransferModal: React.FC<TransferModalProps> = ({
             <ArrowRightLeft size={18} />
           </div>
           <div>
-            <h3 style={{ fontSize: '1.15rem', fontWeight: 800 }}>Déplacer le modèle</h3>
+            <h3 style={{ fontSize: '1.15rem', fontWeight: 800 }}>{t('modal.transfer.title')}</h3>
             <span className="ref-code" style={{ fontSize: '0.95rem' }}>
               {model.reference_code}
             </span>
@@ -200,9 +202,9 @@ export const TransferModal: React.FC<TransferModalProps> = ({
             <MapPin size={15} />
           </div>
           <div>
-            <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>Emplacement actuel :</div>
+            <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>{t('modal.transfer.current_location')}</div>
             <div style={{ fontWeight: 700, fontSize: '0.9rem', color: 'var(--text-primary)' }}>
-              {currentSection ? currentSection.name : 'Non assigné'}
+              {currentSection ? currentSection.name : t('search.not_assigned')}
             </div>
           </div>
         </div>
@@ -210,20 +212,20 @@ export const TransferModal: React.FC<TransferModalProps> = ({
         <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '0.85rem' }}>
           <div>
             <label style={{ display: 'block', fontSize: '0.78rem', fontWeight: 700, marginBottom: '0.25rem' }}>
-              Rayon de destination :
+              {t('modal.transfer.target_section')}
             </label>
             <SectionSearchSelect
               sections={availableSections}
               areas={areas}
               selectedSectionId={toSectionId}
               onSelectSection={setToSectionId}
-              placeholder="Rechercher le nouveau rayon (ex: B1, D27)..."
+              placeholder={t('modal.transfer.select_section_placeholder')}
             />
           </div>
 
           <div>
             <label style={{ display: 'block', fontSize: '0.78rem', fontWeight: 700, marginBottom: '0.25rem' }}>
-              Nom de l’opérateur (Attribution FR-6.3) :
+              {t('modal.transfer.operator_name')}
             </label>
             <input
               type="text"
@@ -235,10 +237,10 @@ export const TransferModal: React.FC<TransferModalProps> = ({
 
           <div style={{ display: 'flex', gap: '0.5rem', marginTop: '0.5rem' }}>
             <button type="submit" className="btn btn-primary" style={{ flex: 1 }}>
-              Confirmer le déplacement
+              {t('modal.transfer.confirm_btn')}
             </button>
             <button type="button" onClick={onClose} className="btn btn-secondary">
-              Annuler
+              {t('modal.transfer.cancel_btn')}
             </button>
           </div>
         </form>

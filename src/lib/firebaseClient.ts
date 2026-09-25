@@ -26,6 +26,7 @@ import {
   TransferLog,
   SearchLog,
   AuditLog,
+  WarehouseMapLayout,
 } from '../types';
 
 export interface FirebaseConfig {
@@ -48,6 +49,7 @@ export interface SyncProgressUpdate {
     | 'transfers'
     | 'search_logs'
     | 'audit_logs'
+    | 'warehouse_maps'
     | 'fetching'
     | 'done';
   message: string;
@@ -67,6 +69,7 @@ export const FIREBASE_COLLECTIONS = {
   transfers: 'transfers',
   search_logs: 'search_logs',
   audit_logs: 'audit_logs',
+  warehouse_maps: 'warehouse_maps',
 } as const;
 
 export const PRESERVED_FIREBASE_COLLECTIONS = new Set<string>([
@@ -75,6 +78,7 @@ export const PRESERVED_FIREBASE_COLLECTIONS = new Set<string>([
 ]);
 
 export const WIPABLE_FIREBASE_COLLECTIONS = [
+  FIREBASE_COLLECTIONS.warehouse_maps,
   FIREBASE_COLLECTIONS.model_sections,
   FIREBASE_COLLECTIONS.transfers,
   FIREBASE_COLLECTIONS.models,
@@ -319,6 +323,16 @@ function sanitizeAuditLog(al: AuditLog) {
     action: al.action || 'update',
     changes: al.changes ? JSON.parse(JSON.stringify(al.changes)) : null,
     created_at: al.created_at || new Date().toISOString(),
+  };
+}
+
+function sanitizeWarehouseMap(wm: WarehouseMapLayout) {
+  return {
+    id: wm.id,
+    warehouse_id: wm.warehouse_id,
+    areas: Array.isArray(wm.areas) ? JSON.parse(JSON.stringify(wm.areas)) : [],
+    version: Number(wm.version) || 1,
+    updated_at: wm.updated_at || new Date().toISOString(),
   };
 }
 
@@ -614,6 +628,30 @@ export async function pushRecordsToFirebase(
       totalPushed += ids.length;
     }
 
+    // 9. Warehouse Maps (Interactive 2D Layouts)
+    const mapsToPush = forceAll
+      ? await db.getAll<WarehouseMapLayout>('warehouse_maps')
+      : dirty.warehouse_maps;
+
+    if (mapsToPush.length > 0) {
+      onProgress?.({
+        phase: 'warehouse_maps' as any,
+        message: `Envoi du plan du dépôt (${mapsToPush.length})...`,
+        current: 0,
+        total: mapsToPush.length,
+        percentage: 99,
+      });
+      const ids = await commitBatchChunks(
+        firestore,
+        FIREBASE_COLLECTIONS.warehouse_maps,
+        mapsToPush,
+        (m) => m.id,
+        sanitizeWarehouseMap
+      );
+      await db.markBulkSynced('warehouse_maps', ids);
+      totalPushed += ids.length;
+    }
+
     onProgress?.({
       phase: 'done',
       message: `Synchronisation Firebase terminée (${totalPushed} enregistrements).`,
@@ -645,6 +683,7 @@ export async function fetchFirebaseDatabase(
   transfers: number;
   search_logs: number;
   audit_logs: number;
+  warehouse_maps: number;
   total: number;
 }> {
   const inst = getFirebaseClient();
@@ -669,6 +708,7 @@ export async function fetchFirebaseDatabase(
     trSnap,
     slSnap,
     alSnap,
+    wmSnap,
   ] = await Promise.all([
     getDocs(collection(firestore, FIREBASE_COLLECTIONS.warehouses)),
     getDocs(collection(firestore, FIREBASE_COLLECTIONS.areas)),
@@ -678,6 +718,7 @@ export async function fetchFirebaseDatabase(
     getDocs(collection(firestore, FIREBASE_COLLECTIONS.transfers)),
     getDocs(collection(firestore, FIREBASE_COLLECTIONS.search_logs)),
     getDocs(collection(firestore, FIREBASE_COLLECTIONS.audit_logs)),
+    getDocs(collection(firestore, FIREBASE_COLLECTIONS.warehouse_maps)),
   ]);
 
   const rawWarehouses = whSnap.docs.map((d) => ({ ...d.data(), id: d.id })) as Warehouse[];
@@ -688,8 +729,10 @@ export async function fetchFirebaseDatabase(
   const rawTransfers = trSnap.docs.map((d) => ({ ...d.data(), id: d.id })) as TransferLog[];
   const rawSearchLogs = slSnap.docs.map((d) => ({ ...d.data(), id: d.id })) as SearchLog[];
   const rawAuditLogs = alSnap.docs.map((d) => ({ ...d.data(), id: d.id })) as AuditLog[];
+  const rawMaps = wmSnap.docs.map((d) => ({ ...d.data(), id: d.id })) as WarehouseMapLayout[];
 
   if (reinitLocal) {
+    await db.clearStore('warehouse_maps');
     await db.clearStore('model_sections');
     await db.clearStore('transfers');
     await db.clearStore('models');
@@ -723,6 +766,9 @@ export async function fetchFirebaseDatabase(
   if (rawAuditLogs.length > 0) {
     await db.bulkPut('audit_logs', rawAuditLogs.map(al => ({ ...al, sync_status: 'synced' as const })));
   }
+  if (rawMaps.length > 0) {
+    await db.bulkPut('warehouse_maps', rawMaps.map(m => ({ ...m, local_sync_status: 'synced' as const, is_dirty: false })));
+  }
 
   await db.deduplicateLocalDatabase();
 
@@ -734,7 +780,8 @@ export async function fetchFirebaseDatabase(
     rawAssignments.length +
     rawTransfers.length +
     rawSearchLogs.length +
-    rawAuditLogs.length;
+    rawAuditLogs.length +
+    rawMaps.length;
 
   onProgress?.({
     phase: 'done',
@@ -753,6 +800,7 @@ export async function fetchFirebaseDatabase(
     transfers: rawTransfers.length,
     search_logs: rawSearchLogs.length,
     audit_logs: rawAuditLogs.length,
+    warehouse_maps: rawMaps.length,
     total,
   };
 }

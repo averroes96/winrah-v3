@@ -6,6 +6,7 @@
 import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { Search, MapPin, Check, X, ChevronDown, Layers } from 'lucide-react';
 import { Section, Area } from '../types';
+import { useI18n } from '../i18n';
 
 interface SectionSearchSelectProps {
   sections: Section[];
@@ -23,9 +24,11 @@ export const SectionSearchSelect: React.FC<SectionSearchSelectProps> = ({
   areas,
   selectedSectionId,
   onSelectSection,
-  placeholder = 'Rechercher un rayon (ex: B1, D27, Zone A)...',
+  placeholder,
   disabled = false,
 }) => {
+  const { direction, t } = useI18n();
+  const displayPlaceholder = placeholder || t('section_select.placeholder');
   const [isOpen, setIsOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedZoneFilter, setSelectedZoneFilter] = useState<string>('all');
@@ -107,7 +110,7 @@ export const SectionSearchSelect: React.FC<SectionSearchSelectProps> = ({
   };
 
   return (
-    <div ref={containerRef} style={{ position: 'relative', width: '100%' }}>
+    <div ref={containerRef} dir={direction} style={{ position: 'relative', width: '100%' }}>
       {/* Closed State / Trigger Display */}
       {!isOpen ? (
         <div
@@ -161,7 +164,7 @@ export const SectionSearchSelect: React.FC<SectionSearchSelectProps> = ({
           ) : (
             <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', color: 'var(--text-muted)', fontSize: '0.875rem' }}>
               <Search size={16} />
-              <span>{placeholder}</span>
+              <span>{displayPlaceholder}</span>
             </div>
           )}
 
@@ -179,7 +182,7 @@ export const SectionSearchSelect: React.FC<SectionSearchSelectProps> = ({
                   display: 'flex',
                   alignItems: 'center',
                 }}
-                title="Effacer la sélection"
+                title={t('section_select.clear_selection')}
               >
                 <X size={16} />
               </button>
@@ -208,7 +211,7 @@ export const SectionSearchSelect: React.FC<SectionSearchSelectProps> = ({
             type="text"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder="Tapez le nom du rayon (ex: B1, D27)..."
+            placeholder={t('section_select.input_placeholder')}
             style={{
               flex: 1,
               border: 'none',
@@ -245,7 +248,7 @@ export const SectionSearchSelect: React.FC<SectionSearchSelectProps> = ({
               border: '1px solid var(--border-default)',
             }}
           >
-            Fermer
+            {t('common.close')}
           </button>
         </div>
       )}
@@ -297,7 +300,7 @@ export const SectionSearchSelect: React.FC<SectionSearchSelectProps> = ({
                   cursor: 'pointer',
                 }}
               >
-                Tous ({sections.length})
+                {t('section_select.all', { count: sections.length })}
               </button>
               {availableZones.map((z) => {
                 const count = sections.filter((s) => s.area_id === z.id).length;
@@ -330,7 +333,7 @@ export const SectionSearchSelect: React.FC<SectionSearchSelectProps> = ({
             {filteredSections.length === 0 ? (
               <div style={{ padding: '1.25rem', textAlign: 'center', color: 'var(--text-muted)', fontSize: '0.82rem' }}>
                 <Search size={20} style={{ margin: '0 auto 0.35rem auto', opacity: 0.5 }} />
-                <span>Aucun rayon ne correspond à votre recherche</span>
+                <span>{t('section_select.no_match')}</span>
               </div>
             ) : (
               filteredSections.map((s) => {
@@ -367,7 +370,7 @@ export const SectionSearchSelect: React.FC<SectionSearchSelectProps> = ({
                           {s.name}
                         </div>
                         <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)', marginTop: '0.05rem' }}>
-                          {area?.name || 'Zone'} {s.capacity ? `• Capacité: ${s.capacity}` : ''}
+                          {area?.name || 'Zone'} {s.capacity ? `• ${t('section_select.capacity', { capacity: s.capacity })}` : ''}
                         </div>
                       </div>
                     </div>

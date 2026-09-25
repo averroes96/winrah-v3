@@ -13,9 +13,12 @@ import {
   AlertTriangle,
   Database,
   ChevronDown,
+  Globe,
 } from 'lucide-react';
 import { syncEngine, SyncEngineStatus } from '../lib/syncEngine';
 import { Warehouse } from '../types';
+import { useI18n } from '../i18n';
+import { Logo } from './Logo';
 
 interface HeaderProps {
   activeWarehouse: Warehouse | null;
@@ -30,6 +33,8 @@ export const Header: React.FC<HeaderProps> = ({
   onOpenWarehouseModal,
   onOpenSyncTab,
 }) => {
+  const { language, toggleLanguage, t } = useI18n();
+
   const [syncStatus, setSyncStatus] = useState<SyncEngineStatus>({
     isOnline: true,
     isSyncing: false,
@@ -63,18 +68,9 @@ export const Header: React.FC<HeaderProps> = ({
         boxShadow: 'var(--shadow-subtle)',
       }}
     >
-      {/* Brand */}
+      {/* Brand Identity */}
       <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-        <h1
-          style={{
-            fontSize: '1.25rem',
-            fontWeight: 800,
-            letterSpacing: '-0.02em',
-            color: 'var(--text-primary)',
-          }}
-        >
-          WINRAH
-        </h1>
+        <Logo size={34} showText={true} showTagline={false} />
       </div>
 
       {/* Center: Active Warehouse Selector */}
@@ -88,7 +84,6 @@ export const Header: React.FC<HeaderProps> = ({
           padding: '0.4rem 0.85rem',
           fontSize: '0.82rem',
           fontWeight: 600,
-          fontFamily: 'var(--font-sans)',
           background: 'transparent',
           border: '1px solid var(--border-default)',
           borderRadius: 'var(--radius-full)',
@@ -96,17 +91,41 @@ export const Header: React.FC<HeaderProps> = ({
           cursor: 'pointer',
           transition: 'background 0.15s ease',
         }}
-        title="Changer d'entrepôt actif"
+        title={t('header.change_warehouse')}
       >
         <WarehouseIcon size={15} style={{ color: 'var(--accent)' }} />
         <span style={{ maxWidth: '140px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-          {activeWarehouse ? activeWarehouse.name : 'Sélectionner'}
+          {activeWarehouse ? activeWarehouse.name : t('header.select_warehouse')}
         </span>
         <ChevronDown size={13} style={{ color: 'var(--text-muted)' }} />
       </button>
 
       {/* Right Controls */}
       <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', flexWrap: 'wrap' }}>
+        {/* Language Switcher Button */}
+        <button
+          type="button"
+          onClick={toggleLanguage}
+          style={{
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: '0.3rem',
+            padding: '0.35rem 0.65rem',
+            fontSize: '0.75rem',
+            fontWeight: 700,
+            background: 'var(--bg-input)',
+            color: 'var(--accent-dark)',
+            border: '1px solid var(--border-default)',
+            borderRadius: 'var(--radius-full)',
+            cursor: 'pointer',
+            transition: 'all 0.15s ease',
+          }}
+          title={language === 'ar' ? 'Passer en Français' : 'التحويل إلى العربية'}
+        >
+          <Globe size={13} style={{ color: 'var(--accent)' }} />
+          <span>{language === 'ar' ? 'FR' : 'عربي'}</span>
+        </button>
+
         {/* Online/Offline Toggle */}
         <button
           type="button"
@@ -118,7 +137,6 @@ export const Header: React.FC<HeaderProps> = ({
             padding: '0.35rem 0.7rem',
             fontSize: '0.75rem',
             fontWeight: 600,
-            fontFamily: 'var(--font-sans)',
             background: syncStatus.isOnline ? 'var(--success-light)' : 'var(--danger-light)',
             color: syncStatus.isOnline ? 'var(--success)' : 'var(--danger)',
             border: 'none',
@@ -126,10 +144,10 @@ export const Header: React.FC<HeaderProps> = ({
             cursor: 'pointer',
             transition: 'all 0.15s ease',
           }}
-          title={syncStatus.isOnline ? 'Simuler hors-ligne' : 'Rétablir en ligne'}
+          title={syncStatus.isOnline ? t('header.sim_offline') : t('header.sim_online')}
         >
           {syncStatus.isOnline ? <Wifi size={13} /> : <WifiOff size={13} />}
-          <span>{syncStatus.isOnline ? 'En ligne' : 'Hors-ligne'}</span>
+          <span>{syncStatus.isOnline ? t('header.online') : t('header.offline')}</span>
         </button>
 
         {/* Sync Status Badge */}
@@ -143,7 +161,6 @@ export const Header: React.FC<HeaderProps> = ({
             padding: '0.35rem 0.7rem',
             fontSize: '0.75rem',
             fontWeight: 600,
-            fontFamily: 'var(--font-sans)',
             background:
               syncStatus.conflictCount > 0
                 ? 'var(--danger-light)'
@@ -161,7 +178,7 @@ export const Header: React.FC<HeaderProps> = ({
             cursor: 'pointer',
             transition: 'all 0.15s ease',
           }}
-          title="État de synchronisation"
+          title={t('header.sync_status')}
         >
           {syncStatus.isSyncing ? (
             <RefreshCw size={13} className="animate-spin" />
@@ -172,10 +189,10 @@ export const Header: React.FC<HeaderProps> = ({
           )}
           <span>
             {syncStatus.conflictCount > 0
-              ? `${syncStatus.conflictCount} conflit(s)`
+              ? t('header.conflicts', { count: syncStatus.conflictCount })
               : syncStatus.pendingChangesCount > 0
-              ? `${syncStatus.pendingChangesCount} en attente`
-              : 'Synchronisé'}
+              ? t('header.pending', { count: syncStatus.pendingChangesCount })
+              : t('header.synced')}
           </span>
         </button>
       </div>

@@ -28,6 +28,7 @@ import {
 } from '../types';
 import { db } from '../db/indexedDb';
 import { SectionSearchSelect } from './SectionSearchSelect';
+import { useI18n } from '../i18n';
 
 interface TransfersTabProps {
   models: ShoeModel[];
@@ -50,6 +51,7 @@ export const TransfersTab: React.FC<TransfersTabProps> = ({
   transfers,
   onRefreshData,
 }) => {
+  const { t } = useI18n();
   const [queuedModelIds, setQueuedModelIds] = useState<string[]>([]);
   const [targetSectionId, setTargetSectionId] = useState<string>('');
   const [operatorName, setOperatorName] = useState<string>('Opérateur');
@@ -307,9 +309,9 @@ export const TransfersTab: React.FC<TransfersTabProps> = ({
             <ArrowRightLeft size={18} />
           </div>
           <div>
-            <h2 style={{ fontSize: '1.0625rem', fontWeight: 700 }}>Déplacer du stock</h2>
+            <h2 style={{ fontSize: '1.0625rem', fontWeight: 700 }}>{t('transfers.title')}</h2>
             <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
-              Recherchez les modèles à transférer, ajoutez-les à la file puis choisissez le rayon de destination
+              {t('transfers.subtitle')}
             </p>
           </div>
         </div>
@@ -317,7 +319,7 @@ export const TransfersTab: React.FC<TransfersTabProps> = ({
         {/* Step 1: Search & Filter Models (Type to find, no bulk loading) */}
         <div style={{ marginBottom: '1.25rem' }}>
           <label style={{ display: 'block', fontSize: '0.8125rem', fontWeight: 600, marginBottom: '0.35rem', color: 'var(--text-secondary)' }}>
-            1. Rechercher des modèles à ajouter
+            1. {t('search.placeholder')}
           </label>
           <div
             style={{
@@ -649,7 +651,7 @@ export const TransfersTab: React.FC<TransfersTabProps> = ({
         >
           <ArrowRightLeft size={18} />
           <span>
-            Confirmer le transfert ({queuedModelIds.length} modèle{queuedModelIds.length > 1 ? 's' : ''})
+            {t('modal.transfer.confirm_btn')} ({queuedModelIds.length})
           </span>
         </button>
       </div>
@@ -658,23 +660,23 @@ export const TransfersTab: React.FC<TransfersTabProps> = ({
       <div className="card" style={{ padding: '1.25rem' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', marginBottom: '0.85rem' }}>
           <Clock size={16} style={{ color: 'var(--accent)' }} />
-          <h3 style={{ fontSize: '0.9375rem', fontWeight: 700 }}>Historique récent des transferts</h3>
+          <h3 style={{ fontSize: '0.9375rem', fontWeight: 700 }}>{t('transfers.history', { count: transfers.length })}</h3>
         </div>
 
         {transfers.length === 0 ? (
           <p style={{ color: 'var(--text-muted)', fontSize: '0.8125rem' }}>
-            Aucun transfert enregistré.
+            {t('transfers.empty_history')}
           </p>
         ) : (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-            {transfers.slice(0, 10).map((t) => {
-              const model = modelMap.get(t.model_id);
-              const fromSec = sectionMap.get(t.from_section_id);
-              const toSec = sectionMap.get(t.to_section_id);
+            {transfers.slice(0, 10).map((log) => {
+              const model = modelMap.get(log.model_id);
+              const fromSec = sectionMap.get(log.from_section_id);
+              const toSec = sectionMap.get(log.to_section_id);
 
               return (
                 <div
-                  key={t.id}
+                  key={log.id}
                   style={{
                     display: 'flex',
                     alignItems: 'center',
@@ -696,12 +698,12 @@ export const TransfersTab: React.FC<TransfersTabProps> = ({
                       {fromSec?.name || '?'} → <strong>{toSec?.name || '?'}</strong>
                     </span>
                     <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', marginTop: '2px' }}>
-                      {t.performed_by || 'Opérateur'} · {new Date(t.created_at).toLocaleString()}
+                      {log.performed_by || 'Opérateur'} · {new Date(log.created_at).toLocaleString()}
                     </div>
                   </div>
 
                   <span className="badge badge-emerald" style={{ fontSize: '0.68rem' }}>
-                    Effectué
+                    {t('transfers.badge_success')}
                   </span>
                 </div>
               );

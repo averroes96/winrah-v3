@@ -25,6 +25,8 @@ import {
 } from '../types';
 import { disambiguateModels, getModelDisplayReference } from '../lib/disambiguation';
 import { db } from '../db/indexedDb';
+import { useI18n } from '../i18n';
+import { LogoMark } from './Logo';
 
 interface SearchTabProps {
   models: ShoeModel[];
@@ -53,6 +55,7 @@ export const SearchTab: React.FC<SearchTabProps> = ({
   query: externalQuery,
   onQueryChange,
 }) => {
+  const { language, t } = useI18n();
   const [internalQuery, setInternalQuery] = useState('');
   const query = externalQuery !== undefined ? externalQuery : internalQuery;
   const setQuery = (q: string) => {
@@ -156,7 +159,7 @@ export const SearchTab: React.FC<SearchTabProps> = ({
           type="text"
           value={query}
           onChange={(e) => setQuery(e.target.value)}
-          placeholder="Chercher par référence (ex: HS-21)"
+          placeholder={t('search.placeholder')}
           className="ref-code"
           style={{
             flex: 1,
@@ -165,7 +168,7 @@ export const SearchTab: React.FC<SearchTabProps> = ({
             outline: 'none',
             color: 'var(--text-primary)',
             fontSize: '0.9375rem',
-            fontFamily: 'var(--font-sans)',
+            fontFamily: 'inherit',
           }}
         />
 
@@ -205,7 +208,7 @@ export const SearchTab: React.FC<SearchTabProps> = ({
             flexShrink: 0,
             transition: 'background 0.15s ease',
           }}
-          title="Scanner un code-barres"
+          title={t('search.scan_tooltip')}
         >
           <ScanBarcode size={18} />
         </button>
@@ -239,12 +242,11 @@ export const SearchTab: React.FC<SearchTabProps> = ({
               color: !isSearchEverywhere ? 'var(--accent-dark)' : 'var(--text-muted)',
               border: `1px solid ${!isSearchEverywhere ? 'var(--accent)' : 'var(--border-default)'}`,
               cursor: 'pointer',
-              fontFamily: 'var(--font-sans)',
               transition: 'all 0.15s ease',
             }}
           >
             <MapPin size={12} />
-            <span>{activeWarehouse ? activeWarehouse.name.split(' ')[0] : 'Entrepôt actif'}</span>
+            <span>{activeWarehouse ? activeWarehouse.name.split(' ')[0] : t('header.active_warehouse')}</span>
           </button>
 
           <button
@@ -262,19 +264,18 @@ export const SearchTab: React.FC<SearchTabProps> = ({
               color: isSearchEverywhere ? 'var(--info)' : 'var(--text-muted)',
               border: `1px solid ${isSearchEverywhere ? 'var(--info)' : 'var(--border-default)'}`,
               cursor: 'pointer',
-              fontFamily: 'var(--font-sans)',
               transition: 'all 0.15s ease',
             }}
-            title="Rechercher dans tous les entrepôts"
+            title={t('search.search_everywhere')}
           >
             <Globe size={12} />
-            <span>Partout ({warehouses.length})</span>
+            <span>{t('search.search_everywhere')} ({warehouses.length})</span>
           </button>
         </div>
 
         {/* Result Counter */}
         <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
-          {isTyping ? `${searchResults.length} modèle(s)` : 'En attente de saisie'}
+          {isTyping ? t('search.results_count', { count: searchResults.length }) : ''}
         </span>
       </div>
 
@@ -302,11 +303,10 @@ export const SearchTab: React.FC<SearchTabProps> = ({
               border: `1px solid ${selectedAreaId === 'all' ? 'var(--text-primary)' : 'var(--border-default)'}`,
               cursor: 'pointer',
               whiteSpace: 'nowrap',
-              fontFamily: 'var(--font-sans)',
               transition: 'all 0.15s ease',
             }}
           >
-            Toutes zones
+            {t('search.all_zones')}
           </button>
           {relevantAreas.map((a) => (
             <button
@@ -347,55 +347,23 @@ export const SearchTab: React.FC<SearchTabProps> = ({
           >
             <div
               style={{
-                width: '52px',
-                height: '52px',
-                borderRadius: '50%',
-                background: 'var(--accent-light)',
-                color: 'var(--accent-dark)',
-                display: 'flex',
+                display: 'inline-flex',
                 alignItems: 'center',
                 justifyContent: 'center',
-                margin: '0 auto 1rem auto',
+                margin: '0 auto 1.25rem auto',
+                borderRadius: '16px',
+                boxShadow: '0 8px 24px rgba(15, 23, 42, 0.12)',
               }}
             >
-              <Search size={26} />
+              <LogoMark size={64} />
             </div>
 
             <h3 style={{ fontSize: '1.05rem', fontWeight: 700, color: 'var(--text-primary)', marginBottom: '0.4rem' }}>
-              Recherche de modèles
+              {t('search.prompt_title')}
             </h3>
             <p style={{ color: 'var(--text-secondary)', fontSize: '0.875rem', maxWidth: '420px', margin: '0 auto 1.25rem auto', lineHeight: 1.5 }}>
-              Tapez une référence de chaussure (ex: <strong>HS-21</strong>), un nom ou un rayon pour afficher les modèles.
+              {t('search.prompt_desc')}
             </p>
-
-            {/* Quick reference examples for fast lookup and testing */}
-            <div style={{ marginBottom: '1.25rem' }}>
-              <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', display: 'block', marginBottom: '0.5rem', fontWeight: 600 }}>
-                Exemples rapides :
-              </span>
-              <div style={{ display: 'flex', justifyContent: 'center', flexWrap: 'wrap', gap: '0.4rem' }}>
-                {['HS-21', 'RS-90', 'CL-01', 'BT-42', 'SP-10'].map((sampleRef) => (
-                  <button
-                    key={sampleRef}
-                    type="button"
-                    onClick={() => setQuery(sampleRef)}
-                    className="badge ref-code"
-                    style={{
-                      background: 'var(--bg-card)',
-                      border: '1px solid var(--border-default)',
-                      padding: '0.35rem 0.65rem',
-                      cursor: 'pointer',
-                      fontSize: '0.8125rem',
-                      borderRadius: 'var(--radius-sm)',
-                      color: 'var(--text-primary)',
-                      transition: 'all 0.15s ease',
-                    }}
-                  >
-                    {sampleRef}
-                  </button>
-                ))}
-              </div>
-            </div>
 
             <button
               type="button"
@@ -411,7 +379,7 @@ export const SearchTab: React.FC<SearchTabProps> = ({
               }}
             >
               <ScanBarcode size={16} />
-              <span>Scanner un code-barres</span>
+              <span>{t('search.scan_barcode')}</span>
             </button>
           </div>
         )}
@@ -532,7 +500,7 @@ export const SearchTab: React.FC<SearchTabProps> = ({
                     ) : (
                       <span className="badge badge-rose" style={{ fontSize: '0.75rem' }}>
                         <AlertCircle size={11} />
-                        Non assigné
+                        {t('search.not_assigned')}
                       </span>
                     )}
                   </div>
@@ -559,10 +527,10 @@ export const SearchTab: React.FC<SearchTabProps> = ({
                       fontSize: '0.8rem',
                       gap: '0.35rem',
                     }}
-                    title="Transférer"
+                    title={t('search.actions.transfer')}
                   >
                     <ArrowRightLeft size={14} />
-                    <span>Transférer</span>
+                    <span>{t('search.actions.transfer')}</span>
                   </button>
                 </div>
               </div>
@@ -596,10 +564,10 @@ export const SearchTab: React.FC<SearchTabProps> = ({
             </div>
 
             <h4 style={{ fontSize: '1rem', fontWeight: 700, marginBottom: '0.3rem', color: 'var(--text-primary)' }}>
-              Aucun résultat pour "{query}"
+              {t('search.no_results_title')}
             </h4>
             <p style={{ color: 'var(--text-muted)', fontSize: '0.8125rem', maxWidth: '380px', margin: '0 auto 1rem auto' }}>
-              Cette recherche a été enregistrée dans le journal d'audit.
+              {t('search.no_results_desc')}
             </p>
 
             {!isSearchEverywhere && (
@@ -610,7 +578,7 @@ export const SearchTab: React.FC<SearchTabProps> = ({
                 style={{ gap: '0.4rem' }}
               >
                 <Globe size={15} />
-                <span>Chercher partout</span>
+                <span>{t('search.search_everywhere')}</span>
               </button>
             )}
           </div>

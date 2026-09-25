@@ -48,6 +48,9 @@ import {
   V2ParsedDatabase,
 } from '../lib/csvHelper';
 import { SectionSearchSelect } from './SectionSearchSelect';
+import { WarehouseMapView } from './WarehouseMapView';
+import { TransferModal } from './TransferModal';
+import { useI18n } from '../i18n';
 
 
 interface CatalogTabProps {
@@ -73,7 +76,20 @@ export const CatalogTab: React.FC<CatalogTabProps> = ({
   onOpenQuickAdd,
   onNavigateToSearch,
 }) => {
+  const { direction, t } = useI18n();
   const [activeSubTab, setActiveSubTab] = useState<'structure' | 'models' | 'import'>('structure');
+
+  // Map View Mode & Quick Transfer state
+  const [structureViewMode, setStructureViewMode] = useState<'tree' | 'map'>(() => {
+    return (localStorage.getItem('winrah_structure_view_mode') as 'tree' | 'map') || 'tree';
+  });
+  const [modelToTransfer, setModelToTransfer] = useState<ShoeModel | null>(null);
+  const [transferFromSectionId, setTransferFromSectionId] = useState<string | undefined>(undefined);
+
+  const handleSetStructureViewMode = (mode: 'tree' | 'map') => {
+    setStructureViewMode(mode);
+    localStorage.setItem('winrah_structure_view_mode', mode);
+  };
 
   // Structure view state (FR-2, FR-3, Uncluttered Accordion & Cascade Deletions)
   const [expandedAreaIds, setExpandedAreaIds] = useState<Set<string>>(new Set());
@@ -512,7 +528,7 @@ export const CatalogTab: React.FC<CatalogTabProps> = ({
             }}
           >
             <FolderTree size={15} />
-            <span>Zones & Rayons</span>
+            <span>{t('catalog.subtab.structure')}</span>
           </button>
 
           <button
@@ -537,7 +553,7 @@ export const CatalogTab: React.FC<CatalogTabProps> = ({
             }}
           >
             <Layers size={15} />
-            <span>Catalogue ({models.length})</span>
+            <span>{t('catalog.subtab.models')} ({models.length})</span>
           </button>
 
           <button
@@ -562,7 +578,7 @@ export const CatalogTab: React.FC<CatalogTabProps> = ({
             }}
           >
             <FileSpreadsheet size={15} />
-            <span>Import</span>
+            <span>{t('catalog.subtab.import')}</span>
           </button>
         </div>
 
@@ -612,21 +628,79 @@ export const CatalogTab: React.FC<CatalogTabProps> = ({
               <div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', marginBottom: '0.15rem' }}>
                   <span className="badge badge-amber" style={{ fontSize: '0.68rem', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
-                    Dépôt Actif
+                    {t('catalog.structure.active_warehouse')}
                   </span>
                   <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
                     {activeWarehouse?.name}
                   </span>
                 </div>
                 <div style={{ fontWeight: 800, fontSize: '1.05rem', color: 'var(--text-primary)' }}>
-                  Architecture du Dépôt
+                  {t('catalog.structure.title')}
                 </div>
                 <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', marginTop: '0.1rem' }}>
-                  {activeAreas.length} zone(s) • {totalActiveSections} rayon(s) • {totalModelsInWarehouse} modèle(s)
+                  {t('catalog.structure.stats', { areas: activeAreas.length, sections: totalActiveSections, models: totalModelsInWarehouse })}
                 </div>
               </div>
 
-              <div style={{ display: 'flex', gap: '0.4rem' }}>
+              <div style={{ display: 'flex', gap: '0.4rem', alignItems: 'center', flexWrap: 'wrap' }}>
+                {/* Structure View Switcher (Tree vs 2D Map) */}
+                <div
+                  style={{
+                    display: 'inline-flex',
+                    background: 'var(--bg-subtle, rgba(0, 0, 0, 0.05))',
+                    padding: '2px',
+                    borderRadius: 'var(--radius-md)',
+                    border: '1px solid var(--border-default)',
+                    marginRight: '0.2rem',
+                  }}
+                >
+                  <button
+                    type="button"
+                    onClick={() => handleSetStructureViewMode('tree')}
+                    style={{
+                      padding: '0.35rem 0.65rem',
+                      fontSize: '0.75rem',
+                      fontWeight: structureViewMode === 'tree' ? 700 : 500,
+                      background: structureViewMode === 'tree' ? 'var(--accent)' : 'transparent',
+                      color: structureViewMode === 'tree' ? '#FFFFFF' : 'var(--text-secondary)',
+                      border: 'none',
+                      borderRadius: 'calc(var(--radius-md) - 2px)',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '0.35rem',
+                      cursor: 'pointer',
+                      transition: 'all 0.15s ease',
+                    }}
+                    title="Vue arborescente détaillée"
+                  >
+                    <FolderTree size={13} />
+                    <span>{t('catalog.structure.view_tree')}</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => handleSetStructureViewMode('map')}
+                    style={{
+                      padding: '0.35rem 0.65rem',
+                      fontSize: '0.75rem',
+                      fontWeight: structureViewMode === 'map' ? 700 : 500,
+                      background: structureViewMode === 'map' ? 'var(--accent)' : 'transparent',
+                      color: structureViewMode === 'map' ? '#FFFFFF' : 'var(--text-secondary)',
+                      border: 'none',
+                      borderRadius: 'calc(var(--radius-md) - 2px)',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '0.35rem',
+                      cursor: 'pointer',
+                      transition: 'all 0.15s ease',
+                    }}
+                    title="Plan 2D et carte thermique de densité"
+                  >
+                    <MapPin size={13} />
+                    <span>{t('catalog.structure.view_map')}</span>
+                  </button>
+                </div>
+
                 <button
                   type="button"
                   onClick={() => setIsAddAreaOpen(true)}
@@ -634,7 +708,7 @@ export const CatalogTab: React.FC<CatalogTabProps> = ({
                   style={{ padding: '0.35rem 0.65rem', fontSize: '0.78rem', gap: '0.3rem' }}
                 >
                   <Plus size={13} />
-                  <span>Zone</span>
+                  <span>{t('catalog.structure.add_area')}</span>
                 </button>
 
                 <button
@@ -648,72 +722,105 @@ export const CatalogTab: React.FC<CatalogTabProps> = ({
                   style={{ padding: '0.35rem 0.65rem', fontSize: '0.78rem', gap: '0.3rem' }}
                 >
                   <Plus size={13} />
-                  <span>Rayon(s)</span>
+                  <span>{t('catalog.structure.add_section')}</span>
                 </button>
               </div>
             </div>
 
-            {/* Quick Shelf / Zone Filter Search & Expand Toggle */}
-            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-              <div style={{ position: 'relative', flex: 1 }}>
-                <Search
-                  size={15}
-                  style={{
-                    position: 'absolute',
-                    left: '0.7rem',
-                    top: '50%',
-                    transform: 'translateY(-50%)',
-                    color: 'var(--text-muted)',
-                  }}
-                />
-                <input
-                  type="text"
-                  className="input-control"
-                  placeholder="Filtrer un rayon ou zone (ex: B1, D27, Zone C)..."
-                  value={structureSearch}
-                  onChange={(e) => setStructureSearch(e.target.value)}
-                  style={{
-                    paddingLeft: '2.1rem',
-                    paddingRight: structureSearch ? '2rem' : '0.75rem',
-                    fontSize: '0.8125rem',
-                    minHeight: '36px',
-                  }}
-                />
-                {structureSearch && (
-                  <button
-                    type="button"
-                    onClick={() => setStructureSearch('')}
+            {/* Quick Shelf / Zone Filter Search & Expand Toggle (Only when in Tree View) */}
+            {structureViewMode === 'tree' && (
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                <div style={{ position: 'relative', flex: 1 }}>
+                  <Search
+                    size={15}
                     style={{
                       position: 'absolute',
-                      right: '0.5rem',
+                      left: '0.7rem',
                       top: '50%',
                       transform: 'translateY(-50%)',
-                      background: 'transparent',
-                      border: 'none',
                       color: 'var(--text-muted)',
-                      cursor: 'pointer',
-                      padding: '2px',
                     }}
-                  >
-                    <X size={15} />
-                  </button>
-                )}
-              </div>
+                  />
+                  <input
+                    type="text"
+                    className="input-control"
+                    placeholder={t('catalog.structure.filter_placeholder')}
+                    value={structureSearch}
+                    onChange={(e) => setStructureSearch(e.target.value)}
+                    style={{
+                      paddingLeft: '2.1rem',
+                      paddingRight: structureSearch ? '2rem' : '0.75rem',
+                      fontSize: '0.8125rem',
+                      minHeight: '36px',
+                    }}
+                  />
+                  {structureSearch && (
+                    <button
+                      type="button"
+                      onClick={() => setStructureSearch('')}
+                      style={{
+                        position: 'absolute',
+                        right: '0.5rem',
+                        top: '50%',
+                        transform: 'translateY(-50%)',
+                        background: 'transparent',
+                        border: 'none',
+                        color: 'var(--text-muted)',
+                        cursor: 'pointer',
+                        padding: '2px',
+                      }}
+                    >
+                      <X size={15} />
+                    </button>
+                  )}
+                </div>
 
-              <button
-                type="button"
-                onClick={handleToggleAllAreas}
-                className="btn btn-secondary"
-                style={{ padding: '0.35rem 0.6rem', fontSize: '0.72rem', whiteSpace: 'nowrap', minHeight: '36px' }}
-                title="Déplier ou replier toutes les zones"
-              >
-                {expandedAreaIds.size === activeAreas.length ? 'Tout replier' : 'Tout déplier'}
-              </button>
-            </div>
+                <button
+                  type="button"
+                  onClick={handleToggleAllAreas}
+                  className="btn btn-secondary"
+                  style={{ padding: '0.35rem 0.6rem', fontSize: '0.72rem', whiteSpace: 'nowrap', minHeight: '36px' }}
+                  title={expandedAreaIds.size === activeAreas.length ? t('catalog.structure.collapse_all') : t('catalog.structure.expand_all')}
+                >
+                  {expandedAreaIds.size === activeAreas.length ? t('catalog.structure.collapse_all') : t('catalog.structure.expand_all')}
+                </button>
+              </div>
+            )}
           </div>
 
-          {/* Collapsible Zones List */}
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+          {/* Conditional: Interactive Map View vs Collapsible Tree */}
+          {structureViewMode === 'map' ? (
+            activeWarehouse ? (
+              <WarehouseMapView
+                warehouse={activeWarehouse}
+                areas={areas}
+                sections={sections}
+                models={models}
+                modelSections={modelSections}
+                onOpenQuickAdd={onOpenQuickAdd}
+                onNavigateToSearch={onNavigateToSearch}
+                onTransferModel={(model, fromSecId) => {
+                  setModelToTransfer(model);
+                  setTransferFromSectionId(fromSecId);
+                }}
+              />
+            ) : (
+              <div
+                style={{
+                  background: 'var(--bg-card)',
+                  border: '1px dashed var(--border-default)',
+                  borderRadius: 'var(--radius-lg)',
+                  padding: '3rem 1.5rem',
+                  textAlign: 'center',
+                  color: 'var(--text-muted)',
+                }}
+              >
+                Veuillez sélectionner un dépôt pour afficher la carte des zones.
+              </div>
+            )
+          ) : (
+            /* Collapsible Zones List */
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
             {activeAreas
               .filter((area) => {
                 if (!structureSearch.trim()) return true;
@@ -984,7 +1091,8 @@ export const CatalogTab: React.FC<CatalogTabProps> = ({
                   </div>
                 );
               })}
-          </div>
+            </div>
+          )}
         </div>
       )}
 
@@ -992,7 +1100,7 @@ export const CatalogTab: React.FC<CatalogTabProps> = ({
       {activeSubTab === 'models' && (
         <div className="fade-in">
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.85rem' }}>
-            <h3 style={{ fontSize: '1.05rem', fontWeight: 800 }}>Fiches Modèles ({models.length})</h3>
+            <h3 style={{ fontSize: '1.05rem', fontWeight: 800 }}>{t('models.title', { count: models.length })}</h3>
             <button
               type="button"
               onClick={() => (onOpenQuickAdd ? onOpenQuickAdd() : setIsAddModelOpen(true))}
@@ -1000,7 +1108,7 @@ export const CatalogTab: React.FC<CatalogTabProps> = ({
               style={{ padding: '0.45rem 0.85rem', fontSize: '0.8rem' }}
             >
               <Plus size={16} />
-              <span>Ajouter un modèle</span>
+              <span>{t('models.add_model')}</span>
             </button>
           </div>
 
@@ -1009,7 +1117,7 @@ export const CatalogTab: React.FC<CatalogTabProps> = ({
             <input
               type="text"
               className="input-control"
-              placeholder="Filtrer par référence ou nom (ex: HS-21)…"
+              placeholder={t('models.filter_placeholder')}
               value={modelSearchQuery}
               onChange={(e) => setModelSearchQuery(e.target.value)}
               style={{ fontSize: '0.8125rem' }}
@@ -1044,7 +1152,7 @@ export const CatalogTab: React.FC<CatalogTabProps> = ({
                     {m.reference_code}
                   </span>
                   <span style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>
-                    {m.name || 'Sans description'}
+                    {m.name || t('models.no_desc')}
                   </span>
                   {m.size_range && (
                     <span className="badge badge-neutral" style={{ marginLeft: '0.45rem', fontSize: '0.7rem' }}>
@@ -1485,9 +1593,10 @@ export const CatalogTab: React.FC<CatalogTabProps> = ({
         >
           <div
             className="card fade-in"
+            dir={direction}
             style={{
               width: '100%',
-              maxWidth: '420px',
+              maxWidth: '440px',
               background: '#FFFFFF',
               color: 'var(--text-primary)',
               borderRadius: 'var(--radius-lg)',
@@ -1497,28 +1606,28 @@ export const CatalogTab: React.FC<CatalogTabProps> = ({
             }}
           >
             <h3 style={{ fontSize: '1.1rem', fontWeight: 800, marginBottom: '1rem' }}>
-              Nouvelle Zone ({activeWarehouse?.name})
+              {t('catalog.create_area_title', { warehouse: activeWarehouse?.name || '' })}
             </h3>
             <form onSubmit={handleCreateArea}>
               <input
                 type="text"
                 autoFocus
                 className="input-control"
-                placeholder="Ex: Zone Baskets Homme"
+                placeholder={t('catalog.create_area_placeholder')}
                 value={newAreaName}
                 onChange={(e) => setNewAreaName(e.target.value)}
                 style={{ marginBottom: '1rem' }}
               />
               <div style={{ display: 'flex', gap: '0.5rem' }}>
                 <button type="submit" className="btn btn-primary" style={{ flex: 1 }}>
-                  Créer
+                  {t('common.save')}
                 </button>
                 <button
                   type="button"
                   onClick={() => setIsAddAreaOpen(false)}
                   className="btn btn-secondary"
                 >
-                  Annuler
+                  {t('common.cancel')}
                 </button>
               </div>
             </form>
@@ -1544,6 +1653,7 @@ export const CatalogTab: React.FC<CatalogTabProps> = ({
         >
           <div
             className="card fade-in"
+            dir={direction}
             style={{
               width: '100%',
               maxWidth: '440px',
@@ -1556,12 +1666,12 @@ export const CatalogTab: React.FC<CatalogTabProps> = ({
             }}
           >
             <h3 style={{ fontSize: '1.1rem', fontWeight: 800, marginBottom: '1rem' }}>
-              Nouveau Rayon / Emplacement
+              {t('catalog.create_section_title')}
             </h3>
             <form onSubmit={handleCreateSection} style={{ display: 'flex', flexDirection: 'column', gap: '0.85rem' }}>
               <div>
                 <label style={{ display: 'block', fontSize: '0.78rem', fontWeight: 700, marginBottom: '0.25rem' }}>
-                  Zone parente :
+                  {t('catalog.parent_zone')}
                 </label>
                 <select
                   value={targetAreaId}
@@ -1578,12 +1688,12 @@ export const CatalogTab: React.FC<CatalogTabProps> = ({
 
               <div>
                 <label style={{ display: 'block', fontSize: '0.78rem', fontWeight: 700, marginBottom: '0.25rem' }}>
-                  Nom ou Préfixe (Ex: Rayon A-01 ou Rayon B) :
+                  {t('catalog.section_name_label')}
                 </label>
                 <input
                   type="text"
                   className="input-control"
-                  placeholder="Ex: Rayon R-10"
+                  placeholder={t('catalog.section_name_placeholder')}
                   value={newSectionName}
                   onChange={(e) => setNewSectionName(e.target.value)}
                 />
@@ -1591,7 +1701,7 @@ export const CatalogTab: React.FC<CatalogTabProps> = ({
 
               <div>
                 <label style={{ display: 'block', fontSize: '0.78rem', fontWeight: 700, marginBottom: '0.25rem' }}>
-                  Nombre à générer en série (FR-3.2 Bulk) :
+                  {t('catalog.bulk_count')}
                 </label>
                 <input
                   type="number"
@@ -1605,12 +1715,12 @@ export const CatalogTab: React.FC<CatalogTabProps> = ({
 
               <div>
                 <label style={{ display: 'block', fontSize: '0.78rem', fontWeight: 700, marginBottom: '0.25rem' }}>
-                  Capacité ou notes (optionnel, FR-3.5) :
+                  {t('catalog.capacity_notes')}
                 </label>
                 <input
                   type="text"
                   className="input-control"
-                  placeholder="Ex: 50 cartons, Étagère haute..."
+                  placeholder={t('catalog.capacity_placeholder')}
                   value={newSectionCapacity}
                   onChange={(e) => setNewSectionCapacity(e.target.value)}
                 />
@@ -1618,14 +1728,14 @@ export const CatalogTab: React.FC<CatalogTabProps> = ({
 
               <div style={{ display: 'flex', gap: '0.5rem', marginTop: '0.5rem' }}>
                 <button type="submit" className="btn btn-primary" style={{ flex: 1 }}>
-                  Créer
+                  {t('common.save')}
                 </button>
                 <button
                   type="button"
                   onClick={() => setIsAddSectionOpen(false)}
                   className="btn btn-secondary"
                 >
-                  Annuler
+                  {t('common.cancel')}
                 </button>
               </div>
             </form>
@@ -1651,6 +1761,7 @@ export const CatalogTab: React.FC<CatalogTabProps> = ({
         >
           <div
             className="card fade-in"
+            dir={direction}
             style={{
               width: '100%',
               maxWidth: '460px',
@@ -1663,22 +1774,22 @@ export const CatalogTab: React.FC<CatalogTabProps> = ({
             }}
           >
             <h3 style={{ fontSize: '1.1rem', fontWeight: 800, marginBottom: '0.25rem' }}>
-              Ajouter une fiche modèle
+              {t('modal.quick_add.card_title')}
             </h3>
             <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: '1rem' }}>
-              Les doublons de référence sont autorisés (FR-4.7) et désambiguïsés automatiquement.
+              {t('modal.quick_add.card_desc')}
             </p>
 
             <form onSubmit={handleCreateModel} style={{ display: 'flex', flexDirection: 'column', gap: '0.85rem' }}>
               <div>
                 <label style={{ display: 'block', fontSize: '0.78rem', fontWeight: 700, marginBottom: '0.25rem' }}>
-                  Code Référence * (ex: HS-21) :
+                  {t('modal.quick_add.ref_label')} :
                 </label>
                 <input
                   type="text"
                   required
                   className="input-control ref-code"
-                  placeholder="HS-21"
+                  placeholder={t('modal.quick_add.ref_placeholder')}
                   value={newModelRef}
                   onChange={(e) => setNewModelRef(e.target.value)}
                 />
@@ -1686,12 +1797,12 @@ export const CatalogTab: React.FC<CatalogTabProps> = ({
 
               <div>
                 <label style={{ display: 'block', fontSize: '0.78rem', fontWeight: 700, marginBottom: '0.25rem' }}>
-                  Description / Nom :
+                  {t('modal.quick_add.name_label')} :
                 </label>
                 <input
                   type="text"
                   className="input-control"
-                  placeholder="Ex: Sneakers Urban Flow Blanche"
+                  placeholder={t('modal.quick_add.name_placeholder')}
                   value={newModelName}
                   onChange={(e) => setNewModelName(e.target.value)}
                 />
@@ -1700,25 +1811,25 @@ export const CatalogTab: React.FC<CatalogTabProps> = ({
               <div style={{ display: 'flex', gap: '0.5rem' }}>
                 <div style={{ flex: 1 }}>
                   <label style={{ display: 'block', fontSize: '0.78rem', fontWeight: 700, marginBottom: '0.25rem' }}>
-                    Pointures (FR-4.1) :
+                    {t('modal.quick_add.size_label')} :
                   </label>
                   <input
                     type="text"
                     className="input-control"
-                    placeholder="Ex: 36/41, 40/45..."
+                    placeholder={t('modal.quick_add.size_placeholder')}
                     value={newModelSize}
                     onChange={(e) => setNewModelSize(e.target.value)}
                   />
                 </div>
                 <div style={{ flex: 1 }}>
                   <label style={{ display: 'block', fontSize: '0.78rem', fontWeight: 700, marginBottom: '0.25rem' }}>
-                    Prix (DA) :
+                    {t('modal.quick_add.price_label')} :
                   </label>
                   <input
                     type="number"
                     step="0.5"
                     className="input-control"
-                    placeholder="249.00"
+                    placeholder={t('modal.quick_add.price_placeholder')}
                     value={newModelPrice}
                     onChange={(e) => setNewModelPrice(e.target.value)}
                   />
@@ -1727,27 +1838,27 @@ export const CatalogTab: React.FC<CatalogTabProps> = ({
 
               <div>
                 <label style={{ display: 'block', fontSize: '0.78rem', fontWeight: 700, marginBottom: '0.25rem' }}>
-                  Associer immédiatement à un rayon :
+                  {t('modal.quick_add.section_label')} :
                 </label>
                 <SectionSearchSelect
                   sections={sections}
                   areas={areas}
                   selectedSectionId={newModelSectionId}
                   onSelectSection={setNewModelSectionId}
-                  placeholder="Rechercher un rayon (optionnel)..."
+                  placeholder={t('modal.quick_add.section_placeholder')}
                 />
               </div>
 
               <div style={{ display: 'flex', gap: '0.5rem', marginTop: '0.5rem' }}>
                 <button type="submit" className="btn btn-primary" style={{ flex: 1 }}>
-                  Enregistrer
+                  {t('common.save')}
                 </button>
                 <button
                   type="button"
                   onClick={() => setIsAddModelOpen(false)}
                   className="btn btn-secondary"
                 >
-                  Annuler
+                  {t('common.cancel')}
                 </button>
               </div>
             </form>
@@ -1802,6 +1913,7 @@ export const CatalogTab: React.FC<CatalogTabProps> = ({
         >
           <div
             className="card fade-in"
+            dir={direction}
             style={{
               width: '100%',
               maxWidth: '420px',
@@ -1830,7 +1942,7 @@ export const CatalogTab: React.FC<CatalogTabProps> = ({
                 <Trash2 size={18} />
               </div>
               <div>
-                <h3 style={{ fontSize: '1.1rem', fontWeight: 800 }}>Supprimer le rayon</h3>
+                <h3 style={{ fontSize: '1.1rem', fontWeight: 800 }}>{t('catalog.delete_section_title')}</h3>
                 <span style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>
                   {sectionToDelete.areaName} • {sectionToDelete.name}
                 </span>
@@ -1853,15 +1965,14 @@ export const CatalogTab: React.FC<CatalogTabProps> = ({
                 <div>
                   <div style={{ fontWeight: 700, display: 'flex', alignItems: 'center', gap: '0.35rem', marginBottom: '0.25rem' }}>
                     <AlertTriangle size={15} style={{ color: 'var(--danger)' }} />
-                    <span>Suppression en cascade</span>
+                    <span>{t('catalog.cascade_warning_title')}</span>
                   </div>
                   <div>
-                    Ce rayon contient <strong>{sectionToDelete.modelsCount} modèle(s)</strong>.
-                    La suppression du rayon <strong>supprimera définitivement tous ces modèles</strong> du catalogue.
+                    {t('catalog.cascade_warning_desc', { count: sectionToDelete.modelsCount })}
                   </div>
                 </div>
               ) : (
-                <div>Ce rayon est vide. Aucun modèle ne sera affecté.</div>
+                <div>{t('catalog.empty_shelf_desc')}</div>
               )}
             </div>
 
@@ -1873,7 +1984,7 @@ export const CatalogTab: React.FC<CatalogTabProps> = ({
                 className="btn btn-secondary"
                 style={{ flex: 1 }}
               >
-                Annuler
+                {t('common.cancel')}
               </button>
               <button
                 type="button"
@@ -1897,7 +2008,7 @@ export const CatalogTab: React.FC<CatalogTabProps> = ({
                 }}
               >
                 {isDeleting ? <Loader2 size={16} className="spin" /> : <Trash2 size={16} />}
-                <span>Supprimer</span>
+                <span>{isDeleting ? t('catalog.deleting') : t('common.delete')}</span>
               </button>
             </div>
           </div>
@@ -2018,6 +2129,25 @@ export const CatalogTab: React.FC<CatalogTabProps> = ({
             </div>
           </div>
         </div>
+      )}
+      {/* Quick Model Transfer Modal (Triggered from Map View) */}
+      {modelToTransfer && (
+        <TransferModal
+          model={modelToTransfer}
+          fromSectionId={transferFromSectionId}
+          sections={sections}
+          areas={areas}
+          activeWarehouse={activeWarehouse}
+          onSuccess={() => {
+            setModelToTransfer(null);
+            setTransferFromSectionId(undefined);
+            onRefreshData();
+          }}
+          onClose={() => {
+            setModelToTransfer(null);
+            setTransferFromSectionId(undefined);
+          }}
+        />
       )}
     </div>
   );

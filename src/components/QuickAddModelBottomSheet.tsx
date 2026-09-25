@@ -20,6 +20,7 @@ import confetti from 'canvas-confetti';
 import { Warehouse, Area, Section, ShoeModel } from '../types';
 import { db } from '../db/indexedDb';
 import { SectionSearchSelect } from './SectionSearchSelect';
+import { useI18n } from '../i18n';
 
 interface QuickAddModelBottomSheetProps {
   isOpen: boolean;
@@ -33,15 +34,6 @@ interface QuickAddModelBottomSheetProps {
   initialReference?: string;
 }
 
-const COMMON_SIZE_PRESETS = [
-  { label: '36/41', desc: 'Femme' },
-  { label: '40/45', desc: 'Homme' },
-  { label: '35/40', desc: 'Mixte' },
-  { label: '39/44', desc: 'Mixte' },
-  { label: '28/35', desc: 'Enfant' },
-  { label: 'Unique', desc: 'Accessoire' },
-];
-
 export const QuickAddModelBottomSheet: React.FC<QuickAddModelBottomSheetProps> = ({
   isOpen,
   onClose,
@@ -53,6 +45,17 @@ export const QuickAddModelBottomSheet: React.FC<QuickAddModelBottomSheetProps> =
   onOpenScanner,
   initialReference = '',
 }) => {
+  const { language, direction, t } = useI18n();
+
+  const sizePresets = useMemo(() => [
+    { label: '36/41', desc: language === 'ar' ? 'نسائي' : 'Femme' },
+    { label: '40/45', desc: language === 'ar' ? 'رجالي' : 'Homme' },
+    { label: '35/40', desc: language === 'ar' ? 'للجنسين' : 'Mixte' },
+    { label: '39/44', desc: language === 'ar' ? 'للجنسين' : 'Mixte' },
+    { label: '28/35', desc: language === 'ar' ? 'أطفال' : 'Enfant' },
+    { label: 'Unique', desc: language === 'ar' ? 'إكسسوار' : 'Accessoire' },
+  ], [language]);
+
   const [referenceCode, setReferenceCode] = useState(initialReference);
   const [name, setName] = useState('');
   const [sectionId, setSectionId] = useState('');
@@ -165,7 +168,7 @@ export const QuickAddModelBottomSheet: React.FC<QuickAddModelBottomSheetProps> =
 
       if (isBatchMode) {
         // Keep section & size range, clear reference & description for next box
-        setSuccessToast(`Modèle "${cleanRef}" enregistré avec succès !`);
+        setSuccessToast(t('modal.quick_add.success_toast', { ref: cleanRef }));
         setReferenceCode('');
         setName('');
         setTimeout(() => setSuccessToast(null), 3000);
@@ -181,7 +184,7 @@ export const QuickAddModelBottomSheet: React.FC<QuickAddModelBottomSheetProps> =
       }
     } catch (err) {
       console.error('Failed to create model:', err);
-      alert('Erreur lors de la création du modèle');
+      alert(t('modal.quick_add.error_alert'));
     } finally {
       setIsSaving(false);
     }
@@ -204,6 +207,7 @@ export const QuickAddModelBottomSheet: React.FC<QuickAddModelBottomSheetProps> =
     >
       <div
         className="card"
+        dir={direction}
         onClick={(e) => e.stopPropagation()}
         style={{
           width: '100%',
@@ -262,10 +266,10 @@ export const QuickAddModelBottomSheet: React.FC<QuickAddModelBottomSheetProps> =
             </div>
             <div>
               <h2 style={{ fontSize: '1.05rem', fontWeight: 800, color: 'var(--text-primary)', margin: 0, lineHeight: 1.2 }}>
-                Ajouter un Modèle
+                {t('modal.quick_add.title')}
               </h2>
               <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>
-                Enregistrement rapide en rayon • {activeWarehouse?.name || 'Dépôt actif'}
+                {t('modal.quick_add.subtitle', { warehouse: activeWarehouse?.name || t('header.active_warehouse') })}
               </span>
             </div>
           </div>
@@ -326,9 +330,9 @@ export const QuickAddModelBottomSheet: React.FC<QuickAddModelBottomSheetProps> =
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.35rem' }}>
               <label style={{ fontSize: '0.8125rem', fontWeight: 700, color: 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
                 <Tag size={15} style={{ color: 'var(--accent)' }} />
-                <span>1. Référence Modèle</span>
+                <span>{t('modal.quick_add.ref_label')}</span>
                 <span className="badge badge-amber" style={{ fontSize: '0.65rem', padding: '0.1rem 0.4rem' }}>
-                  Requis
+                  {t('modal.quick_add.ref_required')}
                 </span>
               </label>
 
@@ -351,7 +355,7 @@ export const QuickAddModelBottomSheet: React.FC<QuickAddModelBottomSheetProps> =
                   }}
                 >
                   <ScanBarcode size={14} style={{ color: 'var(--accent)' }} />
-                  <span>Scanner Code-barres</span>
+                  <span>{t('modal.quick_add.scan_btn')}</span>
                 </button>
               )}
             </div>
@@ -361,7 +365,7 @@ export const QuickAddModelBottomSheet: React.FC<QuickAddModelBottomSheetProps> =
               type="text"
               required
               className="input-control ref-code"
-              placeholder="Ex: HS-104, 545-81, B20..."
+              placeholder={t('modal.quick_add.ref_placeholder')}
               value={referenceCode}
               onChange={(e) => setReferenceCode(e.target.value.toUpperCase())}
               style={{
@@ -375,7 +379,7 @@ export const QuickAddModelBottomSheet: React.FC<QuickAddModelBottomSheetProps> =
             {isDuplicate && (
               <div style={{ marginTop: '0.3rem', fontSize: '0.72rem', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
                 <AlertCircle size={13} style={{ color: 'var(--info)' }} />
-                <span>Cette référence existe déjà dans le stock (plusieurs paires autorisées).</span>
+                <span>{t('modal.quick_add.duplicate_note')}</span>
               </div>
             )}
           </div>
@@ -384,9 +388,9 @@ export const QuickAddModelBottomSheet: React.FC<QuickAddModelBottomSheetProps> =
           <div>
             <label style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', fontSize: '0.8125rem', fontWeight: 700, color: 'var(--text-primary)', marginBottom: '0.35rem' }}>
               <MapPin size={15} style={{ color: 'var(--accent)' }} />
-              <span>2. Rayon d'emplacement</span>
+              <span>{t('modal.quick_add.section_label')}</span>
               <span className="badge badge-neutral" style={{ fontSize: '0.65rem', padding: '0.1rem 0.4rem' }}>
-                Recommandé
+                {t('modal.quick_add.section_recommended')}
               </span>
             </label>
 
@@ -395,7 +399,7 @@ export const QuickAddModelBottomSheet: React.FC<QuickAddModelBottomSheetProps> =
               areas={areas}
               selectedSectionId={sectionId}
               onSelectSection={setSectionId}
-              placeholder="Rechercher un rayon (ex: B1, D27, Zone C)..."
+              placeholder={t('modal.quick_add.section_placeholder')}
             />
           </div>
 
@@ -403,12 +407,12 @@ export const QuickAddModelBottomSheet: React.FC<QuickAddModelBottomSheetProps> =
           <div>
             <label style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', fontSize: '0.8125rem', fontWeight: 700, color: 'var(--text-primary)', marginBottom: '0.35rem' }}>
               <Layers size={15} style={{ color: 'var(--accent)' }} />
-              <span>3. Gamme de Pointures</span>
+              <span>{t('modal.quick_add.size_label')}</span>
             </label>
 
             {/* Quick Preset Chips */}
             <div style={{ display: 'flex', gap: '0.4rem', flexWrap: 'wrap', marginBottom: '0.45rem' }}>
-              {COMMON_SIZE_PRESETS.map((preset) => {
+              {sizePresets.map((preset) => {
                 const isSelected = sizeRange === preset.label;
                 return (
                   <button
@@ -439,7 +443,7 @@ export const QuickAddModelBottomSheet: React.FC<QuickAddModelBottomSheetProps> =
             <input
               type="text"
               className="input-control"
-              placeholder="Sélectionnez une pointure ci-dessus ou saisie libre (ex: 38/43)..."
+              placeholder={t('modal.quick_add.size_placeholder')}
               value={sizeRange}
               onChange={(e) => setSizeRange(e.target.value)}
               style={{ fontSize: '0.85rem', height: '40px' }}
@@ -450,12 +454,12 @@ export const QuickAddModelBottomSheet: React.FC<QuickAddModelBottomSheetProps> =
           <div style={{ display: 'grid', gridTemplateColumns: '1.4fr 1fr', gap: '0.65rem' }}>
             <div>
               <label style={{ display: 'block', fontSize: '0.78rem', fontWeight: 700, color: 'var(--text-primary)', marginBottom: '0.25rem' }}>
-                Description / Nom (optionnel)
+                {t('modal.quick_add.name_label')}
               </label>
               <input
                 type="text"
                 className="input-control"
-                placeholder="Ex: Sneakers Urban..."
+                placeholder={t('modal.quick_add.name_placeholder')}
                 value={name}
                 onChange={(e) => setName(e.target.value)}
                 style={{ fontSize: '0.82rem', height: '42px' }}
@@ -464,13 +468,13 @@ export const QuickAddModelBottomSheet: React.FC<QuickAddModelBottomSheetProps> =
 
             <div>
               <label style={{ display: 'block', fontSize: '0.78rem', fontWeight: 700, color: 'var(--text-primary)', marginBottom: '0.25rem' }}>
-                Prix de vente (DA)
+                {t('modal.quick_add.price_label')}
               </label>
               <input
                 type="number"
                 step="0.5"
                 className="input-control"
-                placeholder="Ex: 2490"
+                placeholder={t('modal.quick_add.price_placeholder')}
                 value={price}
                 onChange={(e) => setPrice(e.target.value)}
                 style={{ fontSize: '0.82rem', height: '42px' }}
@@ -490,7 +494,7 @@ export const QuickAddModelBottomSheet: React.FC<QuickAddModelBottomSheetProps> =
               }}
             >
               <div style={{ fontSize: '0.68rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em', color: 'var(--text-muted)', marginBottom: '0.4rem' }}>
-                Aperçu de la fiche modèle
+                {t('modal.quick_add.preview_title')}
               </div>
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '0.4rem' }}>
                 <div>
@@ -498,7 +502,7 @@ export const QuickAddModelBottomSheet: React.FC<QuickAddModelBottomSheetProps> =
                     {referenceCode}
                   </span>
                   <span style={{ fontSize: '0.82rem', color: 'var(--text-secondary)' }}>
-                    {name || 'Sans description'}
+                    {name || t('modal.quick_add.no_desc')}
                   </span>
                   {sizeRange && (
                     <span className="badge badge-neutral" style={{ marginLeft: '0.35rem', fontSize: '0.68rem' }}>
@@ -514,7 +518,7 @@ export const QuickAddModelBottomSheet: React.FC<QuickAddModelBottomSheetProps> =
                     </span>
                   ) : (
                     <span className="badge badge-neutral" style={{ fontSize: '0.72rem' }}>
-                      Non assigné
+                      {t('search.not_assigned')}
                     </span>
                   )}
                   {price && (
@@ -558,7 +562,7 @@ export const QuickAddModelBottomSheet: React.FC<QuickAddModelBottomSheetProps> =
               />
               <span style={{ display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
                 <Repeat size={13} style={{ color: 'var(--accent)' }} />
-                <span>Mode Série : garder ouvert pour enregistrer plusieurs boîtes à la chaîne</span>
+                <span>{t('modal.quick_add.batch_mode')}</span>
               </span>
             </label>
 
@@ -570,7 +574,7 @@ export const QuickAddModelBottomSheet: React.FC<QuickAddModelBottomSheetProps> =
                 className="btn btn-secondary"
                 style={{ flex: 1, minHeight: '46px' }}
               >
-                Annuler
+                {t('common.cancel')}
               </button>
 
               <button
@@ -590,7 +594,7 @@ export const QuickAddModelBottomSheet: React.FC<QuickAddModelBottomSheetProps> =
                 }}
               >
                 <Check size={18} />
-                <span>{isBatchMode ? 'Enregistrer & Suivant' : 'Enregistrer le Modèle'}</span>
+                <span>{isBatchMode ? t('modal.quick_add.save_and_next') : t('modal.quick_add.save_btn')}</span>
               </button>
             </div>
           </div>

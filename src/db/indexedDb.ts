@@ -16,10 +16,11 @@ import {
   AuditLog,
   AuditAction,
   SyncQueueItem,
+  WarehouseMapLayout,
 } from '../types';
 
 const DB_NAME = 'winrah_db';
-const DB_VERSION = 2; // Incremented for clean store migration
+const DB_VERSION = 3; // Incremented for warehouse_maps layout store
 
 export class LocalDatabase {
   private db: IDBDatabase | null = null;
@@ -111,6 +112,13 @@ export class LocalDatabase {
         if (!db.objectStoreNames.contains('sync_queue')) {
           const s = db.createObjectStore('sync_queue', { keyPath: 'id' });
           s.createIndex('status', 'status', { unique: false });
+        }
+
+        // 12. Warehouse_Maps (Interactive 2D Visual Map Layouts)
+        if (!db.objectStoreNames.contains('warehouse_maps')) {
+          const s = db.createObjectStore('warehouse_maps', { keyPath: 'id' });
+          s.createIndex('warehouse_id', 'warehouse_id', { unique: false });
+          s.createIndex('updated_at', 'updated_at', { unique: false });
         }
       };
 
@@ -399,6 +407,7 @@ export class LocalDatabase {
     transfers: TransferLog[];
     search_logs: SearchLog[];
     audit_logs: AuditLog[];
+    warehouse_maps: WarehouseMapLayout[];
   }> {
     const warehouses = (await this.getAll<Warehouse>('warehouses')).filter((w) => w.is_dirty);
     const areas = (await this.getAll<Area>('areas')).filter((a) => a.is_dirty);
@@ -414,6 +423,9 @@ export class LocalDatabase {
     const audit_logs = (await this.getAll<AuditLog>('audit_logs')).filter(
       (a) => a.sync_status !== 'synced'
     );
+    const warehouse_maps = (await this.getAll<WarehouseMapLayout>('warehouse_maps')).filter(
+      (wm) => wm.is_dirty
+    );
 
     return {
       warehouses,
@@ -424,6 +436,7 @@ export class LocalDatabase {
       transfers,
       search_logs,
       audit_logs,
+      warehouse_maps,
     };
   }
 

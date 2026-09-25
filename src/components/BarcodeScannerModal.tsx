@@ -6,6 +6,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { ScanBarcode, X, Zap, AlertCircle } from 'lucide-react';
 import { Html5Qrcode } from 'html5-qrcode';
+import { useI18n } from '../i18n';
 
 interface BarcodeScannerModalProps {
   isOpen: boolean;
@@ -18,6 +19,7 @@ export const BarcodeScannerModal: React.FC<BarcodeScannerModalProps> = ({
   onScanSuccess,
   onClose,
 }) => {
+  const { direction, t } = useI18n();
   const [cameraError, setCameraError] = useState<string | null>(null);
   const [isScanning, setIsScanning] = useState(false);
   const scannerRef = useRef<Html5Qrcode | null>(null);
@@ -155,6 +157,7 @@ export const BarcodeScannerModal: React.FC<BarcodeScannerModalProps> = ({
     >
       <div
         className="card fade-in"
+        dir={direction}
         style={{
           width: '100%',
           maxWidth: '460px',
@@ -173,7 +176,8 @@ export const BarcodeScannerModal: React.FC<BarcodeScannerModalProps> = ({
           style={{
             position: 'absolute',
             top: '1rem',
-            right: '1rem',
+            right: direction === 'rtl' ? 'auto' : '1rem',
+            left: direction === 'rtl' ? '1rem' : 'auto',
             background: 'var(--bg-input)',
             border: 'none',
             borderRadius: 'var(--radius-sm)',
@@ -185,7 +189,7 @@ export const BarcodeScannerModal: React.FC<BarcodeScannerModalProps> = ({
             color: 'var(--text-secondary)',
             cursor: 'pointer',
           }}
-          aria-label="Fermer"
+          aria-label={t('common.close')}
         >
           <X size={18} />
         </button>
@@ -207,9 +211,11 @@ export const BarcodeScannerModal: React.FC<BarcodeScannerModalProps> = ({
             <ScanBarcode size={22} />
           </div>
           <div>
-            <h2 style={{ fontSize: '1.15rem', fontWeight: 800, color: 'var(--text-primary)' }}>Scanner Code-Barres</h2>
+            <h2 style={{ fontSize: '1.15rem', fontWeight: 800, color: 'var(--text-primary)' }}>
+              {t('modal.scanner.scan_title')}
+            </h2>
             <p style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', marginTop: '0.15rem' }}>
-              Visez l’étiquette du modèle ou du carton
+              {t('modal.scanner.scan_desc')}
             </p>
           </div>
         </div>
@@ -249,7 +255,7 @@ export const BarcodeScannerModal: React.FC<BarcodeScannerModalProps> = ({
         >
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', marginBottom: '0.5rem', color: 'var(--accent-dark)', fontSize: '0.78rem', fontWeight: 700 }}>
             <Zap size={14} />
-            <span>Test rapide sans caméra (Simulation codes stock) :</span>
+            <span>{t('modal.scanner.test_fast')}</span>
           </div>
 
           <div style={{ display: 'flex', gap: '0.45rem', flexWrap: 'wrap' }}>

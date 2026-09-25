@@ -175,6 +175,30 @@ export interface PairingQrPayload {
   protocol_version: number;
 }
 
+// 12. Warehouse_Map (Interactive 2D Layout & Visual Map)
+export interface SectionMapPosition {
+  id: string; // section id
+  col: number; // 0-indexed column in area grid
+  row: number; // 0-indexed row in area grid
+  order: number;
+}
+
+export interface AreaMapPosition {
+  id: string; // area id
+  col: number; // 0-indexed column in warehouse grid
+  row: number; // 0-indexed row in warehouse grid
+  order: number;
+  sections: SectionMapPosition[];
+}
+
+export interface WarehouseMapLayout extends LocalMeta {
+  id: string; // `map-${warehouse_id}`
+  warehouse_id: string;
+  areas: AreaMapPosition[];
+  updated_at: string;
+  version: number;
+}
+
 // Changeset for Device-to-Device or Push
 export interface DeviceChangeset {
   from_device_id: string;
@@ -188,5 +212,6 @@ export interface DeviceChangeset {
     transfers: TransferLog[];
     search_logs: SearchLog[];
     audit_logs: AuditLog[];
+    warehouse_maps?: WarehouseMapLayout[];
   };
 }

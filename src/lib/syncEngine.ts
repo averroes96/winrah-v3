@@ -80,7 +80,8 @@ class SyncEngine {
       dirty.model_sections.length +
       dirty.transfers.length +
       dirty.search_logs.length +
-      dirty.audit_logs.length;
+      dirty.audit_logs.length +
+      dirty.warehouse_maps.length;
 
     const conflicts = await db.getAll<SyncQueueItem>('sync_queue');
     const activeConflicts = conflicts.filter((c) => c.status === 'pending');
@@ -328,6 +329,7 @@ class SyncEngine {
         transfers: await db.getAll('transfers'),
         search_logs: await db.getAll('search_logs'),
         audit_logs: await db.getAll('audit_logs'),
+        warehouse_maps: await db.getAll('warehouse_maps'),
       },
     };
   }

@@ -15,6 +15,7 @@ import {
 } from 'lucide-react';
 import { DisambiguatedModelResult, TransferLog, Section, ShoeModel } from '../types';
 import { getModelDisplayReference } from '../lib/disambiguation';
+import { useI18n } from '../i18n';
 
 interface ModelDetailModalProps {
   item: DisambiguatedModelResult | null;
@@ -31,6 +32,7 @@ export const ModelDetailModal: React.FC<ModelDetailModalProps> = ({
   onInitiateTransfer,
   onClose,
 }) => {
+  const { direction, t } = useI18n();
   if (!item) return null;
 
   const sectionMap = new Map(sections.map((s) => [s.id, s]));
@@ -58,6 +60,7 @@ export const ModelDetailModal: React.FC<ModelDetailModalProps> = ({
     >
       <div
         className="card fade-in"
+        dir={direction}
         style={{
           width: '100%',
           maxWidth: '520px',
@@ -131,7 +134,7 @@ export const ModelDetailModal: React.FC<ModelDetailModalProps> = ({
 
             <div style={{ display: 'flex', gap: '0.4rem', flexWrap: 'wrap' }}>
               {item.model.size_range && (
-                <span className="badge badge-neutral">Tailles: {item.model.size_range}</span>
+                <span className="badge badge-neutral">{t('modal.detail.sizes', { sizes: item.model.size_range })}</span>
               )}
               {item.model.price && (
                 <span className="badge badge-emerald">{item.model.price.toFixed(2)} DA</span>
@@ -154,13 +157,15 @@ export const ModelDetailModal: React.FC<ModelDetailModalProps> = ({
           >
             <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', color: '#fbbf24', fontWeight: 700, marginBottom: '0.2rem' }}>
               <Layers size={14} />
-              <span>Désambiguïsation automatique (FR-4.8)</span>
+              <span>{t('modal.detail.disambig_title')}</span>
             </div>
             <p style={{ color: 'var(--text-secondary)' }}>
-              Il existe <strong>{item.totalEntriesWithCode} fiches</strong> partageant le code{' '}
-              <span className="ref-code">{item.model.reference_code}</span>. Cette fiche est
-              l'index <strong>#{item.displayIndex}</strong> (créée le{' '}
-              {new Date(item.model.created_at).toLocaleDateString()}).
+              {t('modal.detail.disambig_desc', {
+                total: item.totalEntriesWithCode,
+                code: item.model.reference_code,
+                index: item.displayIndex,
+                date: new Date(item.model.created_at).toLocaleDateString(),
+              })}
             </p>
           </div>
         )}
@@ -168,7 +173,7 @@ export const ModelDetailModal: React.FC<ModelDetailModalProps> = ({
         {/* Current Physical Placements */}
         <div style={{ marginBottom: '1.25rem' }}>
           <h4 style={{ fontSize: '0.85rem', fontWeight: 800, color: 'var(--text-muted)', marginBottom: '0.5rem', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-            Localisation actuelle
+            {t('modal.detail.current_location')}
           </h4>
 
           {item.sections.length > 0 ? (
@@ -205,14 +210,14 @@ export const ModelDetailModal: React.FC<ModelDetailModalProps> = ({
                     style={{ padding: '0.35rem 0.75rem', fontSize: '0.75rem', gap: '0.35rem' }}
                   >
                     <ArrowRightLeft size={13} />
-                    <span>Déplacer</span>
+                    <span>{t('modal.detail.move_btn')}</span>
                   </button>
                 </div>
               ))}
             </div>
           ) : (
             <div style={{ color: '#fb7185', fontSize: '0.85rem' }}>
-              Non affecté à un rayon actuellement.
+              {t('modal.detail.not_assigned')}
             </div>
           )}
         </div>
@@ -253,25 +258,25 @@ export const ModelDetailModal: React.FC<ModelDetailModalProps> = ({
             {item.model.reference_code}
           </div>
           <div style={{ fontSize: '0.68rem', color: '#64748b' }}>
-            Code-128 Standard • Prêt pour étiquette carton (BRD §13)
+            {t('modal.detail.barcode_subtitle')}
           </div>
         </div>
 
         {/* Transfer History (FR-6.5) */}
         <div>
           <h4 style={{ fontSize: '0.85rem', fontWeight: 800, color: 'var(--text-muted)', marginBottom: '0.5rem', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-            Historique des déplacements ({modelTransfers.length})
+            {t('modal.detail.history_title')} ({modelTransfers.length})
           </h4>
 
           {modelTransfers.length === 0 ? (
             <p style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>
-              Aucun déplacement antérieur pour ce modèle.
+              {t('modal.detail.no_history')}
             </p>
           ) : (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '0.45rem' }}>
-              {modelTransfers.map((t) => (
+              {modelTransfers.map((itemTransfer) => (
                 <div
-                  key={t.id}
+                  key={itemTransfer.id}
                   style={{
                     fontSize: '0.78rem',
                     padding: '0.5rem 0.75rem',
@@ -281,13 +286,16 @@ export const ModelDetailModal: React.FC<ModelDetailModalProps> = ({
                   }}
                 >
                   <div>
-                    De <strong>{sectionMap.get(t.from_section_id)?.name || 'Rayon'}</strong> vers{' '}
-                    <strong style={{ color: '#fbbf24' }}>
-                      {sectionMap.get(t.to_section_id)?.name || 'Rayon'}
-                    </strong>
+                    {t('modal.detail.transfer_from_to', {
+                      from: sectionMap.get(itemTransfer.from_section_id)?.name || '...',
+                      to: sectionMap.get(itemTransfer.to_section_id)?.name || '...',
+                    })}
                   </div>
                   <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>
-                    Par {t.performed_by || 'Opérateur'} le {new Date(t.created_at).toLocaleString()}
+                    {t('modal.detail.transfer_by_on', {
+                      by: itemTransfer.performed_by || '...',
+                      date: new Date(itemTransfer.created_at).toLocaleString(),
+                    })}
                   </div>
                 </div>
               ))}

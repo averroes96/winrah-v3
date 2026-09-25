@@ -7,6 +7,7 @@ import React, { useState } from 'react';
 import { Warehouse as WarehouseIcon, Plus, Check, X, MapPin } from 'lucide-react';
 import { Warehouse } from '../types';
 import { db } from '../db/indexedDb';
+import { useI18n } from '../i18n';
 
 interface WarehouseSelectorModalProps {
   isOpen: boolean;
@@ -23,6 +24,7 @@ export const WarehouseSelectorModal: React.FC<WarehouseSelectorModalProps> = ({
   onSelectWarehouse,
   onClose,
 }) => {
+  const { direction, t } = useI18n();
   const [isCreating, setIsCreating] = useState(false);
   const [newWarehouseName, setNewWarehouseName] = useState('');
 
@@ -67,6 +69,7 @@ export const WarehouseSelectorModal: React.FC<WarehouseSelectorModalProps> = ({
     >
       <div
         className="card fade-in"
+        dir={direction}
         style={{
           width: '100%',
           maxWidth: '480px',
@@ -85,7 +88,8 @@ export const WarehouseSelectorModal: React.FC<WarehouseSelectorModalProps> = ({
           style={{
             position: 'absolute',
             top: '1rem',
-            right: '1rem',
+            right: direction === 'rtl' ? 'auto' : '1rem',
+            left: direction === 'rtl' ? '1rem' : 'auto',
             background: 'var(--bg-input)',
             border: 'none',
             borderRadius: 'var(--radius-sm)',
@@ -97,7 +101,7 @@ export const WarehouseSelectorModal: React.FC<WarehouseSelectorModalProps> = ({
             color: 'var(--text-secondary)',
             cursor: 'pointer',
           }}
-          aria-label="Fermer"
+          aria-label={t('common.close')}
         >
           <X size={18} />
         </button>
@@ -120,10 +124,10 @@ export const WarehouseSelectorModal: React.FC<WarehouseSelectorModalProps> = ({
           </div>
           <div>
             <h2 style={{ fontSize: '1.15rem', fontWeight: 800, color: 'var(--text-primary)' }}>
-              Sélection de l’entrepôt actif
+              {t('modal.warehouse_selector.title')}
             </h2>
             <p style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', marginTop: '0.15rem' }}>
-              Les recherches et inventaires sont ciblés sur ce site
+              {t('modal.warehouse_selector.targeting_desc')}
             </p>
           </div>
         </div>
@@ -150,7 +154,7 @@ export const WarehouseSelectorModal: React.FC<WarehouseSelectorModalProps> = ({
                   border: isSelected ? '2px solid var(--accent)' : '1px solid var(--border-default)',
                   background: isSelected ? '#FFFBEB' : '#FFFFFF',
                   borderRadius: 'var(--radius-md)',
-                  textAlign: 'left',
+                  textAlign: direction === 'rtl' ? 'right' : 'left',
                   boxShadow: isSelected ? '0 0 0 1px var(--accent)' : 'none',
                   transition: 'all 0.15s ease',
                 }}
@@ -162,7 +166,7 @@ export const WarehouseSelectorModal: React.FC<WarehouseSelectorModalProps> = ({
                       {w.name}
                     </div>
                     <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', marginTop: '0.1rem' }}>
-                      Créé le {new Date(w.created_at).toLocaleDateString()}
+                      {t('modal.warehouse_selector.created_at', { date: new Date(w.created_at).toLocaleDateString() })}
                     </div>
                   </div>
                 </div>
@@ -196,20 +200,20 @@ export const WarehouseSelectorModal: React.FC<WarehouseSelectorModalProps> = ({
               type="text"
               autoFocus
               className="input-control"
-              placeholder="Ex: Dépôt Marrakech Sud..."
+              placeholder={t('modal.warehouse_selector.new_warehouse_placeholder')}
               value={newWarehouseName}
               onChange={(e) => setNewWarehouseName(e.target.value)}
             />
             <div style={{ display: 'flex', gap: '0.5rem' }}>
               <button type="submit" className="btn btn-primary" style={{ flex: 1 }}>
-                Enregistrer
+                {t('common.save')}
               </button>
               <button
                 type="button"
                 onClick={() => setIsCreating(false)}
                 className="btn btn-secondary"
               >
-                Annuler
+                {t('common.cancel')}
               </button>
             </div>
           </form>
@@ -221,7 +225,7 @@ export const WarehouseSelectorModal: React.FC<WarehouseSelectorModalProps> = ({
             style={{ width: '100%', gap: '0.45rem' }}
           >
             <Plus size={16} />
-            <span>Créer un nouvel entrepôt</span>
+            <span>{t('modal.warehouse_selector.create_new')}</span>
           </button>
         )}
       </div>

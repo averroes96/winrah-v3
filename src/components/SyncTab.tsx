@@ -18,11 +18,14 @@ import {
   CloudDownload,
   CloudUpload,
   Trash2,
+  Globe,
 } from 'lucide-react';
 import { syncEngine, SyncEngineStatus } from '../lib/syncEngine';
 import { db } from '../db/indexedDb';
 import { SyncQueueItem, SyncLog } from '../types';
 import { initBaseWarehouse } from '../db/seedData';
+import { useI18n } from '../i18n';
+import { Logo } from './Logo';
 
 import {
   fetchFirebaseDatabase,
@@ -40,6 +43,7 @@ export const SyncTab: React.FC<SyncTabProps> = ({
   onOpenDevicePairing,
   onRefreshData,
 }) => {
+  const { language, setLanguage, t } = useI18n();
   const [status, setStatus] = useState<SyncEngineStatus>({
     isOnline: true,
     isSyncing: false,
@@ -207,6 +211,73 @@ export const SyncTab: React.FC<SyncTabProps> = ({
 
   return (
     <div className="fade-in">
+      {/* Language Preference Card */}
+      <div
+        className="card"
+        style={{
+          padding: '1.25rem',
+          marginBottom: '1.25rem',
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          flexWrap: 'wrap',
+          gap: '1rem',
+          borderLeft: '4px solid var(--accent)',
+        }}
+      >
+        <div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.25rem' }}>
+            <Globe size={18} style={{ color: 'var(--accent)' }} />
+            <h3 style={{ fontSize: '1rem', fontWeight: 800 }}>
+              {t('sync.lang_title')}
+            </h3>
+          </div>
+          <p style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
+            {t('sync.lang_desc')}
+          </p>
+        </div>
+
+        <div style={{ display: 'flex', gap: '0.5rem' }}>
+          <button
+            type="button"
+            onClick={() => setLanguage('ar')}
+            className="btn"
+            style={{
+              padding: '0.45rem 1rem',
+              fontSize: '0.85rem',
+              fontWeight: 700,
+              background: language === 'ar' ? 'var(--accent)' : 'var(--bg-input)',
+              color: language === 'ar' ? '#FFFFFF' : 'var(--text-primary)',
+              border: `1px solid ${language === 'ar' ? 'var(--accent)' : 'var(--border-default)'}`,
+              borderRadius: 'var(--radius-md)',
+              cursor: 'pointer',
+              transition: 'all 0.15s ease',
+            }}
+          >
+            {t('sync.lang_ar')}
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setLanguage('fr')}
+            className="btn"
+            style={{
+              padding: '0.45rem 1rem',
+              fontSize: '0.85rem',
+              fontWeight: 700,
+              background: language === 'fr' ? 'var(--accent)' : 'var(--bg-input)',
+              color: language === 'fr' ? '#FFFFFF' : 'var(--text-primary)',
+              border: `1px solid ${language === 'fr' ? 'var(--accent)' : 'var(--border-default)'}`,
+              borderRadius: 'var(--radius-md)',
+              cursor: 'pointer',
+              transition: 'all 0.15s ease',
+            }}
+          >
+            {t('sync.lang_fr')}
+          </button>
+        </div>
+      </div>
+
       {/* Top Sync Hero Card */}
       <div
         className="card"
@@ -623,6 +694,40 @@ export const SyncTab: React.FC<SyncTabProps> = ({
             ))}
           </div>
         )}
+      </div>
+
+      {/* Brand Identity & System Info Footer */}
+      <div
+        className="card fade-in"
+        style={{
+          marginTop: '1.25rem',
+          padding: '1.75rem 1.25rem',
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+          textAlign: 'center',
+          gap: '0.85rem',
+          background: 'linear-gradient(180deg, #FFFFFF 0%, #F8FAFC 100%)',
+          border: '1px solid var(--border-default)',
+          borderRadius: 'var(--radius-lg)',
+          boxShadow: 'var(--shadow-subtle)',
+        }}
+      >
+        <Logo size={48} showText={true} showTagline={true} />
+        <p style={{ fontSize: '0.82rem', color: 'var(--text-secondary)', maxWidth: '440px', margin: 0, lineHeight: 1.45 }}>
+          {t('app.tagline')}
+        </p>
+        <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', justifyContent: 'center' }}>
+          <span className="badge badge-amber" style={{ fontSize: '0.72rem', padding: '0.2rem 0.55rem' }}>
+            WINRAH v3.0 PWA
+          </span>
+          <span className="badge badge-emerald" style={{ fontSize: '0.72rem', padding: '0.2rem 0.55rem' }}>
+            100% Offline-First
+          </span>
+          <span className="badge badge-neutral" style={{ fontSize: '0.72rem', padding: '0.2rem 0.55rem' }}>
+            IndexedDB + Firebase
+          </span>
+        </div>
       </div>
     </div>
   );
