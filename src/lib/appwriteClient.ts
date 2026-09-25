@@ -679,6 +679,59 @@ export async function fetchServerDatabase(
 }
 
 /**
+ * Clears all documents from all Appwrite collections to allow a clean full push.
+ */
+export async function clearServerDatabase(
+  onProgress?: SyncProgressCallback
+): Promise<void> {
+  const inst = getAppwriteClient();
+  if (!inst) throw new Error('Client Appwrite non configuré.');
+  const cfg = getAppwriteConfig();
+  await ensureAppwriteSession(inst.client);
+
+  const collections = [
+    APPWRITE_COLLECTIONS.transfers,
+    APPWRITE_COLLECTIONS.model_sections,
+    APPWRITE_COLLECTIONS.models,
+    APPWRITE_COLLECTIONS.sections,
+    APPWRITE_COLLECTIONS.areas,
+    APPWRITE_COLLECTIONS.warehouses,
+  ];
+
+  for (let i = 0; i < collections.length; i++) {
+    const col = collections[i];
+    onProgress?.({
+      phase: 'init',
+      message: `Nettoyage du serveur : suppression de la collection "${col}"...`,
+      current: i,
+      total: collections.length,
+      percentage: Math.round((i / collections.length) * 100),
+    });
+
+    try {
+      const docs = await fetchAllCollectionDocuments(inst.databases, cfg.databaseId, col);
+      if (docs.length > 0) {
+        await runConcurrentPool(
+          docs,
+          25,
+          async (doc) => {
+            try {
+              await inst.databases.deleteDocument(cfg.databaseId, col, doc.$id);
+            } catch (err: any) {
+              if (err?.code !== 404) {
+                console.warn(`Error deleting ${doc.$id} in ${col}:`, err?.message);
+              }
+            }
+          }
+        );
+      }
+    } catch (e) {
+      console.warn(`Error clearing collection ${col}:`, e);
+    }
+  }
+}
+
+/**
  * Fast Concurrent Push of local records to Appwrite Collections.
  * Uses a worker pool (20 concurrent requests for models/assignments) and creates
  * an authenticated anonymous session to eliminate guest IP rate limits.
@@ -706,6 +759,18 @@ export async function pushRecordsToAppwrite(
 
   // Ensure authenticated session to lift guest rate limits
   await ensureAppwriteSession(inst.client);
+
+  // If forceAll is requested (Send Local Database), clear the server database first
+  if (forceAll) {
+    onProgress?.({
+      phase: 'init',
+      message: 'Vidage préalable du serveur Appwrite...',
+      current: 0,
+      total: 100,
+      percentage: 2,
+    });
+    await clearServerDatabase(onProgress);
+  }
 
   const dirty = await db.getDirtyRecords();
 

@@ -106,15 +106,13 @@ class SyncEngine {
       let conflicts = 0;
 
       if (isAppwriteConfigured()) {
-        // Appwrite Live Sync
+        // Appwrite Live Sync: only push local changes that were not sent to DB server
         const pushResult = await pushRecordsToAppwrite(false, onProgress);
         pushed = pushResult.pushed;
         if (pushResult.errors > 0 && pushResult.pushed === 0 && pushResult.lastError) {
           throw new Error(pushResult.lastError);
         }
-
-        const pullResult = await pullRecordsFromAppwrite(onProgress);
-        pulled = pullResult.pulled;
+        pulled = 0;
       } else {
         // Local Simulator Mode
         const dirty = await db.getDirtyRecords();

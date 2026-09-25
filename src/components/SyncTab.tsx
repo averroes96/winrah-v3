@@ -13,7 +13,6 @@ import {
   CheckCircle2,
   Clock,
   ShieldCheck,
-  Sparkles,
   ArrowRight,
   GitMerge,
   CloudDownload,
@@ -72,15 +71,15 @@ export const SyncTab: React.FC<SyncTabProps> = ({
     try {
       const res = await syncEngine.syncNow((p) => setSyncProgress(p));
       await db.deduplicateLocalDatabase();
-      if (res.pushed === 0 && res.pulled === 0) {
+      if (res.pushed === 0) {
         setStatusFeedback({
           success: true,
-          text: 'Synchronisation terminée : Base locale et serveur déjà synchronisés et résolus sans doublon.',
+          text: 'Synchronisation terminée : aucune modification locale en attente. Tout est à jour sur le serveur.',
         });
       } else {
         setStatusFeedback({
           success: true,
-          text: `Synchronisation réussie ! ${res.pushed} envoyés vers le serveur, ${res.pulled} reçus et résolus.${res.conflicts > 0 ? ` (${res.conflicts} conflits détectés)` : ''}`,
+          text: `Synchronisation réussie ! ${res.pushed} modification(s) locale(s) envoyée(s) au serveur.`,
         });
       }
       await loadData();
@@ -137,7 +136,7 @@ export const SyncTab: React.FC<SyncTabProps> = ({
       const res = await syncEngine.pushAllToAppwrite((p) => setSyncProgress(p));
       setStatusFeedback({
         success: true,
-        text: `Base locale envoyée vers Appwrite avec succès ! ${res.pushed} éléments enregistrés sur le serveur.`,
+        text: `Base serveur vidée et base locale envoyée avec succès ! ${res.pushed} enregistrements synchronisés sur le serveur.`,
       });
       await loadData();
       onRefreshData();
@@ -152,11 +151,6 @@ export const SyncTab: React.FC<SyncTabProps> = ({
     }
   };
 
-  const handleSimulateConflict = async () => {
-    await syncEngine.injectSimulatedConflict();
-    await loadData();
-    onRefreshData();
-  };
 
   const handleResolveConflict = async (
     conflictId: string,
@@ -174,7 +168,7 @@ export const SyncTab: React.FC<SyncTabProps> = ({
       const res = await fetchServerDatabase(true, (p) => setSyncProgress(p));
       setStatusFeedback({
         success: true,
-        text: `Base serveur téléchargée avec succès ! ${res.total} enregistrements chargés (${res.models} modèles, ${res.sections} rayons, ${res.warehouses} entrepôts).`,
+        text: `Base locale réinitialisée et base serveur téléchargée avec succès (${res.total} enregistrements chargés).`,
       });
       await loadData();
       onRefreshData();
@@ -411,7 +405,7 @@ export const SyncTab: React.FC<SyncTabProps> = ({
       )}
 
       {/* Conflict Resolution Center (FR-7.6) */}
-      {conflicts.length > 0 ? (
+      {conflicts.length > 0 && (
         <div
           className="card fade-in"
           style={{
@@ -523,43 +517,6 @@ export const SyncTab: React.FC<SyncTabProps> = ({
               </div>
             ))}
           </div>
-        </div>
-      ) : (
-        /* Test Tool: Conflict Simulator Button */
-        <div
-          className="card"
-          style={{
-            padding: '1rem 1.25rem',
-            marginBottom: '1rem',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-            flexWrap: 'wrap',
-            gap: '0.75rem',
-            background: 'var(--accent-light)',
-            border: '1px dashed var(--accent)',
-          }}
-        >
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem' }}>
-            <Sparkles size={18} style={{ color: 'var(--accent)' }} />
-            <div>
-              <div style={{ fontWeight: 700, fontSize: '0.88rem' }}>
-                Test local : Simuler un conflit hors-ligne (FR-7.6)
-              </div>
-              <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
-                Génère instantanément un conflit simulé pour tester l'écran de résolution manuelle
-              </div>
-            </div>
-          </div>
-
-          <button
-            type="button"
-            onClick={handleSimulateConflict}
-            className="btn btn-secondary"
-            style={{ padding: '0.4rem 0.85rem', fontSize: '0.8rem' }}
-          >
-            Créer un conflit test
-          </button>
         </div>
       )}
 
