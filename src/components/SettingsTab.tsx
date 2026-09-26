@@ -709,9 +709,10 @@ export const SettingsTab: React.FC<SettingsTabProps> = ({
               color: 'var(--text-primary)',
             }}
           >
-            <option value="gemini-2.0-flash">Gemini 2.0 Flash (Recommandé - Rapide & Vision avancée)</option>
-            <option value="gemini-1.5-flash">Gemini 1.5 Flash (Standard stable)</option>
-            <option value="gemini-1.5-pro">Gemini 1.5 Pro (Haute précision OCR)</option>
+            <option value="gemini-2.5-flash">Gemini 2.5 Flash (Recommandé)</option>
+            <option value="gemini-2.0-flash">Gemini 2.0 Flash</option>
+            <option value="gemini-1.5-flash">Gemini 1.5 Flash</option>
+            <option value="gemini-1.5-pro">Gemini 1.5 Pro</option>
           </select>
         </div>
 
