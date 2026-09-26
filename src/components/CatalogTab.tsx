@@ -4,28 +4,22 @@
 // CSV bulk import with error validation, and CSV export.
 // ============================================================================
 
-import React, { useState, useMemo, useRef } from 'react';
+import React, { useState, useMemo } from 'react';
 import {
   FolderTree,
   Plus,
-  FileSpreadsheet,
-  Download,
-  Upload,
   Layers,
   MapPin,
   Trash2,
   CheckCircle,
   AlertCircle,
   X,
-  Database,
-  Sparkles,
   Search,
   Check,
-  Loader2,
-  FileText,
   ChevronDown,
   ChevronRight,
   AlertTriangle,
+  Loader2,
 } from 'lucide-react';
 import {
   Warehouse,
@@ -35,18 +29,6 @@ import {
   ModelSection,
 } from '../types';
 import { db } from '../db/indexedDb';
-import {
-  exportCatalogToCsv,
-  parseCsvText,
-  getCsvTemplate,
-  downloadBlob,
-  CsvImportRow,
-  detectCsvFormat,
-  parseV2DatabaseCsv,
-  importV2DatabaseToDb,
-  importStandardCsvToDb,
-  V2ParsedDatabase,
-} from '../lib/csvHelper';
 import { SectionSearchSelect } from './SectionSearchSelect';
 import { WarehouseMapView } from './WarehouseMapView';
 import { TransferModal } from './TransferModal';
@@ -77,19 +59,9 @@ export const CatalogTab: React.FC<CatalogTabProps> = ({
   onNavigateToSearch,
 }) => {
   const { direction, t } = useI18n();
-  const [activeSubTab, setActiveSubTab] = useState<'structure' | 'models' | 'import'>('structure');
-
-  // Map View Mode & Quick Transfer state
-  const [structureViewMode, setStructureViewMode] = useState<'tree' | 'map'>(() => {
-    return (localStorage.getItem('winrah_structure_view_mode') as 'tree' | 'map') || 'tree';
-  });
+  const [activeSubTab, setActiveSubTab] = useState<'structure' | 'map' | 'models'>('structure');
   const [modelToTransfer, setModelToTransfer] = useState<ShoeModel | null>(null);
   const [transferFromSectionId, setTransferFromSectionId] = useState<string | undefined>(undefined);
-
-  const handleSetStructureViewMode = (mode: 'tree' | 'map') => {
-    setStructureViewMode(mode);
-    localStorage.setItem('winrah_structure_view_mode', mode);
-  };
 
   // Structure view state (FR-2, FR-3, Uncluttered Accordion & Cascade Deletions)
   const [expandedAreaIds, setExpandedAreaIds] = useState<Set<string>>(new Set());
@@ -126,18 +98,6 @@ export const CatalogTab: React.FC<CatalogTabProps> = ({
   const [newModelPrice, setNewModelPrice] = useState('');
   const [newModelSectionId, setNewModelSectionId] = useState('');
   const [modelSearchQuery, setModelSearchQuery] = useState('');
-
-  // CSV Import State
-  const [csvContent, setCsvContent] = useState('');
-  const [detectedFormat, setDetectedFormat] = useState<'v2' | 'v3' | 'unknown'>('unknown');
-  const [parsedV2Data, setParsedV2Data] = useState<V2ParsedDatabase | null>(null);
-  const [csvValidationErrors, setCsvValidationErrors] = useState<Array<{ line: number; message: string }>>([]);
-  const [parsedRows, setParsedRows] = useState<CsvImportRow[]>([]);
-  const [importSuccessMessage, setImportSuccessMessage] = useState<string | null>(null);
-  const [targetWarehouseIdForImport, setTargetWarehouseIdForImport] = useState<string>('');
-  const [isImporting, setIsImporting] = useState(false);
-  const [isLoadingOriginalV2, setIsLoadingOriginalV2] = useState(false);
-  const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Filtered areas for active warehouse
   const activeAreas = useMemo(() => {
@@ -383,220 +343,93 @@ export const CatalogTab: React.FC<CatalogTabProps> = ({
     onRefreshData();
   };
 
-  // CSV Content Change with Instant Format Detection & Validation
-  const handleCsvChange = (text: string) => {
-    setCsvContent(text);
-    setImportSuccessMessage(null);
-    const fmt = detectCsvFormat(text);
-    setDetectedFormat(fmt);
-
-    if (fmt === 'v2') {
-      const res = parseV2DatabaseCsv(text);
-      setParsedV2Data(res);
-      setCsvValidationErrors(res.errors);
-      setParsedRows([]);
-    } else if (fmt === 'v3') {
-      const res = parseCsvText(text);
-      setParsedRows(res.validRows);
-      setCsvValidationErrors(res.errors);
-      setParsedV2Data(null);
-    } else {
-      setParsedV2Data(null);
-      setParsedRows([]);
-      setCsvValidationErrors([]);
-    }
-  };
-
-  // 1-Click Load bundled V2 Database
-  const handleLoadOriginalV2 = async () => {
-    try {
-      setIsLoadingOriginalV2(true);
-      setImportSuccessMessage(null);
-      const resp = await fetch('/v2_database.csv');
-      if (!resp.ok) throw new Error('Could not fetch /v2_database.csv');
-      const text = await resp.text();
-      handleCsvChange(text);
-    } catch (err) {
-      console.error('Failed to load v2_database.csv:', err);
-      setCsvValidationErrors([{ line: 1, message: 'Could not load /v2_database.csv. Please upload it manually.' }]);
-    } finally {
-      setIsLoadingOriginalV2(false);
-    }
-  };
-
-  // Upload CSV File
-  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    const reader = new FileReader();
-    reader.onload = (evt) => {
-      const text = evt.target?.result as string;
-      if (text) {
-        handleCsvChange(text);
-      }
-    };
-    reader.readAsText(file);
-    e.target.value = '';
-  };
-
-  // Manual re-validation trigger
-  const handleValidateCsv = () => {
-    handleCsvChange(csvContent);
-  };
-
-  // Commit valid CSV rows (Ultra-fast bulk import for both V2 and V3)
-  const handleCommitCsv = async () => {
-    setIsImporting(true);
-    try {
-      if (detectedFormat === 'v2' && parsedV2Data && parsedV2Data.products.length > 0) {
-        const result = await importV2DatabaseToDb(parsedV2Data);
-        setImportSuccessMessage(
-          `Base réinitialisée avec succès ! ${result.modelsCreated.toLocaleString()} modèles et ${result.sectionsCreated} sections importés dans l'entrepôt BASE.`
-        );
-        setCsvContent('');
-        setParsedV2Data(null);
-        setDetectedFormat('unknown');
-        onRefreshData();
-      } else if (detectedFormat === 'v3' && parsedRows.length > 0) {
-        const result = await importStandardCsvToDb(parsedRows);
-        setImportSuccessMessage(
-          `Base réinitialisée avec succès ! ${result.modelsCreated.toLocaleString()} modèles importés dans l'entrepôt BASE.`
-        );
-        setCsvContent('');
-        setParsedRows([]);
-        setDetectedFormat('unknown');
-        onRefreshData();
-      }
-    } catch (err) {
-      console.error('Import failed:', err);
-      setCsvValidationErrors([{ line: 1, message: 'Database import failed. Please check the console for details.' }]);
-    } finally {
-      setIsImporting(false);
-    }
-  };
-
-  // Export full catalog to CSV (FR-9.1)
-  const handleExportCsv = () => {
-    const csv = exportCatalogToCsv(models, modelSections, sections, areas, warehouses);
-    const date = new Date().toISOString().split('T')[0];
-    downloadBlob(csv, `winrah_catalogue_${date}.csv`);
-  };
-
   return (
     <div className="fade-in">
       {/* Navigation Subtabs with Sleek Segmented Control */}
       <div
         style={{
           display: 'flex',
-          justifyContent: 'space-between',
-          alignItems: 'center',
-          gap: '0.5rem',
+          background: 'var(--bg-card)',
+          border: '1px solid var(--border-default)',
+          borderRadius: 'var(--radius-md)',
+          padding: '3px',
+          gap: '3px',
           marginBottom: '1rem',
-          flexWrap: 'wrap',
         }}
       >
-        <div
+        <button
+          type="button"
+          onClick={() => setActiveSubTab('structure')}
           style={{
+            flex: 1,
+            padding: '0.5rem 0.65rem',
+            fontSize: '0.8rem',
+            fontWeight: 700,
+            borderRadius: 'var(--radius-sm)',
+            border: 'none',
+            cursor: 'pointer',
             display: 'flex',
-            background: 'var(--bg-card)',
-            border: '1px solid var(--border-default)',
-            borderRadius: 'var(--radius-md)',
-            padding: '3px',
-            gap: '3px',
-            flex: '1 1 auto',
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: '0.35rem',
+            background: activeSubTab === 'structure' ? 'var(--accent)' : 'transparent',
+            color: activeSubTab === 'structure' ? '#FFFFFF' : 'var(--text-secondary)',
+            transition: 'all 0.15s ease',
+            whiteSpace: 'nowrap',
           }}
         >
-          <button
-            type="button"
-            onClick={() => setActiveSubTab('structure')}
-            style={{
-              flex: 1,
-              padding: '0.45rem 0.65rem',
-              fontSize: '0.8rem',
-              fontWeight: 700,
-              borderRadius: 'var(--radius-sm)',
-              border: 'none',
-              cursor: 'pointer',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              gap: '0.35rem',
-              background: activeSubTab === 'structure' ? 'var(--accent)' : 'transparent',
-              color: activeSubTab === 'structure' ? '#FFFFFF' : 'var(--text-secondary)',
-              transition: 'all 0.15s ease',
-              whiteSpace: 'nowrap',
-            }}
-          >
-            <FolderTree size={15} />
-            <span>{t('catalog.subtab.structure')}</span>
-          </button>
-
-          <button
-            type="button"
-            onClick={() => setActiveSubTab('models')}
-            style={{
-              flex: 1,
-              padding: '0.45rem 0.65rem',
-              fontSize: '0.8rem',
-              fontWeight: 700,
-              borderRadius: 'var(--radius-sm)',
-              border: 'none',
-              cursor: 'pointer',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              gap: '0.35rem',
-              background: activeSubTab === 'models' ? 'var(--accent)' : 'transparent',
-              color: activeSubTab === 'models' ? '#FFFFFF' : 'var(--text-secondary)',
-              transition: 'all 0.15s ease',
-              whiteSpace: 'nowrap',
-            }}
-          >
-            <Layers size={15} />
-            <span>{t('catalog.subtab.models')} ({models.length})</span>
-          </button>
-
-          <button
-            type="button"
-            onClick={() => setActiveSubTab('import')}
-            style={{
-              flex: 1,
-              padding: '0.45rem 0.65rem',
-              fontSize: '0.8rem',
-              fontWeight: 700,
-              borderRadius: 'var(--radius-sm)',
-              border: 'none',
-              cursor: 'pointer',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              gap: '0.35rem',
-              background: activeSubTab === 'import' ? 'var(--accent)' : 'transparent',
-              color: activeSubTab === 'import' ? '#FFFFFF' : 'var(--text-secondary)',
-              transition: 'all 0.15s ease',
-              whiteSpace: 'nowrap',
-            }}
-          >
-            <FileSpreadsheet size={15} />
-            <span>{t('catalog.subtab.import')}</span>
-          </button>
-        </div>
+          <FolderTree size={15} />
+          <span>{t('catalog.subtab.structure')}</span>
+        </button>
 
         <button
           type="button"
-          onClick={handleExportCsv}
-          className="btn btn-secondary"
+          onClick={() => setActiveSubTab('map')}
           style={{
-            padding: '0.45rem 0.65rem',
-            fontSize: '0.78rem',
-            height: '36px',
-            flexShrink: 0,
-            gap: '0.3rem',
+            flex: 1,
+            padding: '0.5rem 0.65rem',
+            fontSize: '0.8rem',
+            fontWeight: 700,
+            borderRadius: 'var(--radius-sm)',
+            border: 'none',
+            cursor: 'pointer',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: '0.35rem',
+            background: activeSubTab === 'map' ? 'var(--accent)' : 'transparent',
+            color: activeSubTab === 'map' ? '#FFFFFF' : 'var(--text-secondary)',
+            transition: 'all 0.15s ease',
+            whiteSpace: 'nowrap',
           }}
-          title="Exporter tout le catalogue au format CSV"
         >
-          <Download size={14} style={{ color: 'var(--accent)' }} />
-          <span>Export</span>
+          <MapPin size={15} />
+          <span>Plan Carte 2D</span>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => setActiveSubTab('models')}
+          style={{
+            flex: 1,
+            padding: '0.5rem 0.65rem',
+            fontSize: '0.8rem',
+            fontWeight: 700,
+            borderRadius: 'var(--radius-sm)',
+            border: 'none',
+            cursor: 'pointer',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: '0.35rem',
+            background: activeSubTab === 'models' ? 'var(--accent)' : 'transparent',
+            color: activeSubTab === 'models' ? '#FFFFFF' : 'var(--text-secondary)',
+            transition: 'all 0.15s ease',
+            whiteSpace: 'nowrap',
+          }}
+        >
+          <Layers size={15} />
+          <span>{t('catalog.subtab.models')} ({models.length})</span>
         </button>
       </div>
 
@@ -643,64 +476,6 @@ export const CatalogTab: React.FC<CatalogTabProps> = ({
               </div>
 
               <div style={{ display: 'flex', gap: '0.4rem', alignItems: 'center', flexWrap: 'wrap' }}>
-                {/* Structure View Switcher (Tree vs 2D Map) */}
-                <div
-                  style={{
-                    display: 'inline-flex',
-                    background: 'var(--bg-subtle, rgba(0, 0, 0, 0.05))',
-                    padding: '2px',
-                    borderRadius: 'var(--radius-md)',
-                    border: '1px solid var(--border-default)',
-                    marginRight: '0.2rem',
-                  }}
-                >
-                  <button
-                    type="button"
-                    onClick={() => handleSetStructureViewMode('tree')}
-                    style={{
-                      padding: '0.35rem 0.65rem',
-                      fontSize: '0.75rem',
-                      fontWeight: structureViewMode === 'tree' ? 700 : 500,
-                      background: structureViewMode === 'tree' ? 'var(--accent)' : 'transparent',
-                      color: structureViewMode === 'tree' ? '#FFFFFF' : 'var(--text-secondary)',
-                      border: 'none',
-                      borderRadius: 'calc(var(--radius-md) - 2px)',
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: '0.35rem',
-                      cursor: 'pointer',
-                      transition: 'all 0.15s ease',
-                    }}
-                    title="Vue arborescente détaillée"
-                  >
-                    <FolderTree size={13} />
-                    <span>{t('catalog.structure.view_tree')}</span>
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => handleSetStructureViewMode('map')}
-                    style={{
-                      padding: '0.35rem 0.65rem',
-                      fontSize: '0.75rem',
-                      fontWeight: structureViewMode === 'map' ? 700 : 500,
-                      background: structureViewMode === 'map' ? 'var(--accent)' : 'transparent',
-                      color: structureViewMode === 'map' ? '#FFFFFF' : 'var(--text-secondary)',
-                      border: 'none',
-                      borderRadius: 'calc(var(--radius-md) - 2px)',
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: '0.35rem',
-                      cursor: 'pointer',
-                      transition: 'all 0.15s ease',
-                    }}
-                    title="Plan 2D et carte thermique de densité"
-                  >
-                    <MapPin size={13} />
-                    <span>{t('catalog.structure.view_map')}</span>
-                  </button>
-                </div>
-
                 <button
                   type="button"
                   onClick={() => setIsAddAreaOpen(true)}
@@ -727,100 +502,67 @@ export const CatalogTab: React.FC<CatalogTabProps> = ({
               </div>
             </div>
 
-            {/* Quick Shelf / Zone Filter Search & Expand Toggle (Only when in Tree View) */}
-            {structureViewMode === 'tree' && (
-              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                <div style={{ position: 'relative', flex: 1 }}>
-                  <Search
-                    size={15}
+            {/* Quick Shelf / Zone Filter Search & Expand Toggle */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+              <div style={{ position: 'relative', flex: 1 }}>
+                <Search
+                  size={15}
+                  style={{
+                    position: 'absolute',
+                    left: '0.7rem',
+                    top: '50%',
+                    transform: 'translateY(-50%)',
+                    color: 'var(--text-muted)',
+                  }}
+                />
+                <input
+                  type="text"
+                  className="input-control"
+                  placeholder={t('catalog.structure.filter_placeholder')}
+                  value={structureSearch}
+                  onChange={(e) => setStructureSearch(e.target.value)}
+                  style={{
+                    paddingLeft: '2.1rem',
+                    paddingRight: structureSearch ? '2rem' : '0.75rem',
+                    fontSize: '0.8125rem',
+                    minHeight: '36px',
+                  }}
+                />
+                {structureSearch && (
+                  <button
+                    type="button"
+                    onClick={() => setStructureSearch('')}
                     style={{
                       position: 'absolute',
-                      left: '0.7rem',
+                      right: '0.5rem',
                       top: '50%',
                       transform: 'translateY(-50%)',
+                      background: 'transparent',
+                      border: 'none',
                       color: 'var(--text-muted)',
+                      cursor: 'pointer',
+                      padding: '2px',
                     }}
-                  />
-                  <input
-                    type="text"
-                    className="input-control"
-                    placeholder={t('catalog.structure.filter_placeholder')}
-                    value={structureSearch}
-                    onChange={(e) => setStructureSearch(e.target.value)}
-                    style={{
-                      paddingLeft: '2.1rem',
-                      paddingRight: structureSearch ? '2rem' : '0.75rem',
-                      fontSize: '0.8125rem',
-                      minHeight: '36px',
-                    }}
-                  />
-                  {structureSearch && (
-                    <button
-                      type="button"
-                      onClick={() => setStructureSearch('')}
-                      style={{
-                        position: 'absolute',
-                        right: '0.5rem',
-                        top: '50%',
-                        transform: 'translateY(-50%)',
-                        background: 'transparent',
-                        border: 'none',
-                        color: 'var(--text-muted)',
-                        cursor: 'pointer',
-                        padding: '2px',
-                      }}
-                    >
-                      <X size={15} />
-                    </button>
-                  )}
-                </div>
-
-                <button
-                  type="button"
-                  onClick={handleToggleAllAreas}
-                  className="btn btn-secondary"
-                  style={{ padding: '0.35rem 0.6rem', fontSize: '0.72rem', whiteSpace: 'nowrap', minHeight: '36px' }}
-                  title={expandedAreaIds.size === activeAreas.length ? t('catalog.structure.collapse_all') : t('catalog.structure.expand_all')}
-                >
-                  {expandedAreaIds.size === activeAreas.length ? t('catalog.structure.collapse_all') : t('catalog.structure.expand_all')}
-                </button>
+                  >
+                    <X size={15} />
+                  </button>
+                )}
               </div>
-            )}
+
+              <button
+                type="button"
+                onClick={handleToggleAllAreas}
+                className="btn btn-secondary"
+                style={{ padding: '0.35rem 0.6rem', fontSize: '0.72rem', whiteSpace: 'nowrap', minHeight: '36px' }}
+                title={expandedAreaIds.size === activeAreas.length ? t('catalog.structure.collapse_all') : t('catalog.structure.expand_all')}
+              >
+                {expandedAreaIds.size === activeAreas.length ? t('catalog.structure.collapse_all') : t('catalog.structure.expand_all')}
+              </button>
+            </div>
           </div>
 
-          {/* Conditional: Interactive Map View vs Collapsible Tree */}
-          {structureViewMode === 'map' ? (
-            activeWarehouse ? (
-              <WarehouseMapView
-                warehouse={activeWarehouse}
-                areas={areas}
-                sections={sections}
-                models={models}
-                modelSections={modelSections}
-                onOpenQuickAdd={onOpenQuickAdd}
-                onNavigateToSearch={onNavigateToSearch}
-                onTransferModel={(model, fromSecId) => {
-                  setModelToTransfer(model);
-                  setTransferFromSectionId(fromSecId);
-                }}
-              />
-            ) : (
-              <div
-                style={{
-                  background: 'var(--bg-card)',
-                  border: '1px dashed var(--border-default)',
-                  borderRadius: 'var(--radius-lg)',
-                  padding: '3rem 1.5rem',
-                  textAlign: 'center',
-                  color: 'var(--text-muted)',
-                }}
-              >
-                Veuillez sélectionner un dépôt pour afficher la carte des zones.
-              </div>
-            )
-          ) : (
-            /* Collapsible Zones List */
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+          {/* Collapsible Zones List */}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
             {activeAreas
               .filter((area) => {
                 if (!structureSearch.trim()) return true;
@@ -1092,11 +834,44 @@ export const CatalogTab: React.FC<CatalogTabProps> = ({
                 );
               })}
             </div>
+        </div>
+      )}
+
+      {/* 2. Warehouse 2D Interactive Map View */}
+      {activeSubTab === 'map' && (
+        <div className="fade-in">
+          {activeWarehouse ? (
+            <WarehouseMapView
+              warehouse={activeWarehouse}
+              areas={areas}
+              sections={sections}
+              models={models}
+              modelSections={modelSections}
+              onOpenQuickAdd={onOpenQuickAdd}
+              onNavigateToSearch={onNavigateToSearch}
+              onTransferModel={(model, fromSecId) => {
+                setModelToTransfer(model);
+                setTransferFromSectionId(fromSecId);
+              }}
+            />
+          ) : (
+            <div
+              style={{
+                background: 'var(--bg-card)',
+                border: '1px dashed var(--border-default)',
+                borderRadius: 'var(--radius-lg)',
+                padding: '3rem 1.5rem',
+                textAlign: 'center',
+                color: 'var(--text-muted)',
+              }}
+            >
+              Veuillez sélectionner un dépôt pour afficher la carte des zones.
+            </div>
           )}
         </div>
       )}
 
-      {/* 2. Models Catalog View */}
+      {/* 3. Models Catalog View */}
       {activeSubTab === 'models' && (
         <div className="fade-in">
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.85rem' }}>
@@ -1174,404 +949,6 @@ export const CatalogTab: React.FC<CatalogTabProps> = ({
               </div>
             ))}
           </div>
-        </div>
-      )}
-
-      {/* 3. CSV & Database Import View */}
-      {activeSubTab === 'import' && (
-        <div className="card fade-in" style={{ padding: '1.25rem' }}>
-          {/* Header & Subtitle */}
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '1rem', marginBottom: '1.25rem' }}>
-            <div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                <Database size={20} style={{ color: 'var(--brand-primary)' }} />
-                <h3 style={{ fontSize: '1.15rem', fontWeight: 800 }}>Import Catalog & V2 Database</h3>
-              </div>
-              <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginTop: '0.2rem' }}>
-                Import complete V2 database extracts (1,484+ products across 101 sections) or standard V3 spreadsheets.
-              </p>
-            </div>
-
-            {/* Quick Action Buttons */}
-            <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
-              <input
-                type="file"
-                ref={fileInputRef}
-                accept=".csv,.txt"
-                onChange={handleFileUpload}
-                style={{ display: 'none' }}
-              />
-
-              <button
-                type="button"
-                onClick={handleLoadOriginalV2}
-                disabled={isLoadingOriginalV2}
-                className="btn btn-primary"
-                style={{ fontSize: '0.78rem', padding: '0.45rem 0.85rem', display: 'flex', alignItems: 'center', gap: '0.4rem' }}
-                title="Load the 1,484 models database from v2"
-              >
-                {isLoadingOriginalV2 ? (
-                  <>
-                    <Loader2 size={14} className="spin" />
-                    <span>Loading...</span>
-                  </>
-                ) : (
-                  <>
-                    <Sparkles size={14} />
-                    <span>Load Original V2 Database (1,484 items)</span>
-                  </>
-                )}
-              </button>
-
-              <button
-                type="button"
-                onClick={() => fileInputRef.current?.click()}
-                className="btn btn-secondary"
-                style={{ fontSize: '0.78rem', padding: '0.45rem 0.85rem', display: 'flex', alignItems: 'center', gap: '0.4rem' }}
-              >
-                <Upload size={14} />
-                <span>Upload CSV File</span>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => handleCsvChange(getCsvTemplate())}
-                className="btn btn-secondary"
-                style={{ fontSize: '0.78rem', padding: '0.45rem 0.85rem', display: 'flex', alignItems: 'center', gap: '0.4rem' }}
-              >
-                <FileSpreadsheet size={14} />
-                <span>V3 Template</span>
-              </button>
-            </div>
-          </div>
-
-          {/* Destination Warehouse Selector */}
-          <div
-            style={{
-              padding: '0.85rem 1rem',
-              background: 'var(--bg-secondary)',
-              borderRadius: 'var(--radius-md)',
-              marginBottom: '1rem',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'space-between',
-              flexWrap: 'wrap',
-              gap: '0.75rem',
-            }}
-          >
-            <div>
-              <label style={{ fontSize: '0.78rem', fontWeight: 700, display: 'block', color: 'var(--text-primary)' }}>
-                Entrepôt de destination :
-              </label>
-              <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>
-                L'importation réinitialise la base locale et associe l'ensemble des données à l'entrepôt <strong>BASE</strong>.
-              </span>
-            </div>
-
-            <div
-              style={{
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: '0.4rem',
-                padding: '0.35rem 0.75rem',
-                borderRadius: 'var(--radius-full)',
-                background: 'rgba(99, 102, 241, 0.1)',
-                color: '#4f46e5',
-                fontWeight: 700,
-                fontSize: '0.8rem',
-              }}
-            >
-              <span>BASE (Automatique)</span>
-            </div>
-          </div>
-
-          {/* Format Detection & Statistics Preview */}
-          {detectedFormat === 'v2' && parsedV2Data && (
-            <div
-              className="fade-in"
-              style={{
-                padding: '1rem',
-                background: 'rgba(59, 130, 246, 0.06)',
-                border: '1px solid rgba(59, 130, 246, 0.25)',
-                borderRadius: 'var(--radius-md)',
-                marginBottom: '1rem',
-              }}
-            >
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.75rem' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '0.45rem' }}>
-                  <span className="badge badge-primary" style={{ fontSize: '0.75rem', fontWeight: 800 }}>
-                    Detected: V2 Warehouse Database Dump
-                  </span>
-                  <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
-                    Ready for 1-click bulk import
-                  </span>
-                </div>
-              </div>
-
-              {/* Statistics Grid */}
-              <div
-                style={{
-                  display: 'grid',
-                  gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))',
-                  gap: '0.75rem',
-                }}
-              >
-                <div className="card" style={{ padding: '0.65rem 0.85rem', background: 'var(--bg-card)' }}>
-                  <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)', fontWeight: 600, display: 'block' }}>
-                    Source Deposit
-                  </span>
-                  <strong style={{ fontSize: '1rem', color: 'var(--text-primary)' }}>
-                    {parsedV2Data.summary.baseDepositName}
-                  </strong>
-                  <span style={{ fontSize: '0.68rem', color: 'var(--text-secondary)', display: 'block' }}>
-                    ID: 1 (Main Base)
-                  </span>
-                </div>
-
-                <div className="card" style={{ padding: '0.65rem 0.85rem', background: 'var(--bg-card)' }}>
-                  <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)', fontWeight: 600, display: 'block' }}>
-                    Shoe Models
-                  </span>
-                  <strong style={{ fontSize: '1.15rem', color: 'var(--brand-primary)' }}>
-                    {parsedV2Data.products.length.toLocaleString()}
-                  </strong>
-                  <span style={{ fontSize: '0.68rem', color: 'var(--text-secondary)', display: 'block' }}>
-                    All linked to shelves
-                  </span>
-                </div>
-
-                <div className="card" style={{ padding: '0.65rem 0.85rem', background: 'var(--bg-card)' }}>
-                  <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)', fontWeight: 600, display: 'block' }}>
-                    Shelves / Sections
-                  </span>
-                  <strong style={{ fontSize: '1.15rem', color: 'var(--success)' }}>
-                    {parsedV2Data.sections.length}
-                  </strong>
-                  <span style={{ fontSize: '0.68rem', color: 'var(--text-secondary)', display: 'block' }}>
-                    A1-A11, B1-B30, C1-C35, D1-D27
-                  </span>
-                </div>
-
-                <div className="card" style={{ padding: '0.65rem 0.85rem', background: 'var(--bg-card)' }}>
-                  <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)', fontWeight: 600, display: 'block' }}>
-                    Zones Mapped
-                  </span>
-                  <strong style={{ fontSize: '1rem', color: 'var(--text-primary)' }}>
-                    {parsedV2Data.summary.zones.length} Zones
-                  </strong>
-                  <span style={{ fontSize: '0.68rem', color: 'var(--text-secondary)', display: 'block' }}>
-                    {parsedV2Data.summary.zones.join(', ')}
-                  </span>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {detectedFormat === 'v3' && (
-            <div
-              className="fade-in"
-              style={{
-                padding: '0.75rem 1rem',
-                background: 'rgba(16, 185, 129, 0.08)',
-                border: '1px solid rgba(16, 185, 129, 0.25)',
-                borderRadius: 'var(--radius-md)',
-                marginBottom: '1rem',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'space-between',
-              }}
-            >
-              <div>
-                <span className="badge badge-emerald" style={{ fontSize: '0.75rem', fontWeight: 800 }}>
-                  Detected: V3 Standard Catalog CSV
-                </span>
-                <span style={{ fontSize: '0.8rem', marginLeft: '0.5rem', color: 'var(--text-secondary)' }}>
-                  {parsedRows.length} valid row(s) ready to import
-                </span>
-              </div>
-            </div>
-          )}
-
-          {/* Raw CSV Textarea */}
-          <div style={{ position: 'relative', marginBottom: '1rem' }}>
-            <textarea
-              value={csvContent}
-              onChange={(e) => handleCsvChange(e.target.value)}
-              rows={8}
-              className="input-control"
-              style={{ fontFamily: 'var(--font-mono)', fontSize: '0.82rem', paddingBottom: '1.75rem' }}
-              placeholder="Paste raw CSV content here, click 'Upload CSV File', or click 'Load Original V2 Database' above..."
-            />
-            {csvContent.trim() && (
-              <span
-                style={{
-                  position: 'absolute',
-                  bottom: '8px',
-                  right: '12px',
-                  fontSize: '0.7rem',
-                  color: 'var(--text-muted)',
-                  fontFamily: 'var(--font-mono)',
-                  background: 'var(--bg-card)',
-                  padding: '2px 6px',
-                  borderRadius: '4px',
-                  border: '1px solid var(--border-color)',
-                }}
-              >
-                {csvContent.split(/\r?\n/).filter(Boolean).length} lines
-              </span>
-            )}
-          </div>
-
-          {/* Action Buttons */}
-          <div style={{ display: 'flex', gap: '0.65rem', flexWrap: 'wrap', marginBottom: '1rem' }}>
-            <button
-              type="button"
-              onClick={handleCommitCsv}
-              disabled={
-                isImporting ||
-                (detectedFormat === 'v2' && (!parsedV2Data || parsedV2Data.products.length === 0)) ||
-                (detectedFormat === 'v3' && parsedRows.length === 0) ||
-                (detectedFormat === 'unknown' && !csvContent.trim())
-              }
-              className="btn btn-primary"
-              style={{ minWidth: '220px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem' }}
-            >
-              {isImporting ? (
-                <>
-                  <Loader2 size={16} className="spin" />
-                  <span>Importing into Database...</span>
-                </>
-              ) : detectedFormat === 'v2' && parsedV2Data ? (
-                <>
-                  <Sparkles size={16} />
-                  <span>
-                    Import V2 Database ({parsedV2Data.products.length.toLocaleString()} Items & {parsedV2Data.sections.length} Shelves)
-                  </span>
-                </>
-              ) : detectedFormat === 'v3' ? (
-                <>
-                  <Upload size={16} />
-                  <span>Import {parsedRows.length} Items</span>
-                </>
-              ) : (
-                <>
-                  <Upload size={16} />
-                  <span>Import Data</span>
-                </>
-              )}
-            </button>
-
-            <button
-              type="button"
-              onClick={handleValidateCsv}
-              disabled={!csvContent.trim() || isImporting}
-              className="btn btn-secondary"
-            >
-              Re-validate Format
-            </button>
-
-            {csvContent.trim() && (
-              <button
-                type="button"
-                onClick={() => {
-                  setCsvContent('');
-                  setParsedV2Data(null);
-                  setParsedRows([]);
-                  setCsvValidationErrors([]);
-                  setImportSuccessMessage(null);
-                  setDetectedFormat('unknown');
-                }}
-                className="btn btn-secondary"
-              >
-                Clear
-              </button>
-            )}
-          </div>
-
-          {/* Validation Errors Display */}
-          {csvValidationErrors.length > 0 && (
-            <div
-              style={{
-                padding: '0.85rem',
-                background: 'var(--danger-light)',
-                border: '1px solid var(--danger)',
-                borderRadius: 'var(--radius-md)',
-                marginBottom: '1rem',
-              }}
-            >
-              <h4 style={{ color: 'var(--danger)', fontSize: '0.85rem', fontWeight: 700, marginBottom: '0.35rem', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
-                <AlertCircle size={16} />
-                Validation errors detected :
-              </h4>
-              <ul style={{ paddingLeft: '1.25rem', fontSize: '0.8rem', color: 'var(--danger)' }}>
-                {csvValidationErrors.slice(0, 8).map((err, i) => (
-                  <li key={i}>
-                    Line {err.line} : {err.message}
-                  </li>
-                ))}
-                {csvValidationErrors.length > 8 && (
-                  <li style={{ fontStyle: 'italic', marginTop: '0.25rem' }}>
-                    ... and {csvValidationErrors.length - 8} more errors.
-                  </li>
-                )}
-              </ul>
-            </div>
-          )}
-
-          {/* Success Banner */}
-          {importSuccessMessage && (
-            <div
-              className="fade-in"
-              style={{
-                padding: '1rem',
-                background: 'var(--success-light)',
-                border: '1px solid var(--success)',
-                borderRadius: 'var(--radius-md)',
-                color: 'var(--success)',
-                marginBottom: '1rem',
-              }}
-            >
-              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontWeight: 800, fontSize: '0.9rem', marginBottom: '0.5rem' }}>
-                <CheckCircle size={18} />
-                <span>{importSuccessMessage}</span>
-              </div>
-              <p style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', marginBottom: '0.75rem' }}>
-                All records have been saved into offline IndexedDB and are immediately available for searching, barcode scanning, and stock transfers.
-              </p>
-
-              <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
-                {onNavigateToSearch && (
-                  <button
-                    type="button"
-                    onClick={() => onNavigateToSearch('545-81')}
-                    className="btn btn-primary"
-                    style={{ fontSize: '0.78rem', padding: '0.4rem 0.75rem', display: 'flex', alignItems: 'center', gap: '0.35rem' }}
-                  >
-                    <Search size={14} />
-                    <span>Test Search (e.g. 545-81)</span>
-                  </button>
-                )}
-                <button
-                  type="button"
-                  onClick={() => setActiveSubTab('structure')}
-                  className="btn btn-secondary"
-                  style={{ fontSize: '0.78rem', padding: '0.4rem 0.75rem', display: 'flex', alignItems: 'center', gap: '0.35rem' }}
-                >
-                  <Layers size={14} />
-                  <span>View Shelf Structure</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setActiveSubTab('models')}
-                  className="btn btn-secondary"
-                  style={{ fontSize: '0.78rem', padding: '0.4rem 0.75rem', display: 'flex', alignItems: 'center', gap: '0.35rem' }}
-                >
-                  <FileText size={14} />
-                  <span>View All Models</span>
-                </button>
-              </div>
-            </div>
-          )}
         </div>
       )}
 

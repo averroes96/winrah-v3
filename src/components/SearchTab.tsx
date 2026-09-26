@@ -14,6 +14,8 @@ import {
   X,
   Layers,
   AlertCircle,
+  SlidersHorizontal,
+  RotateCcw,
 } from 'lucide-react';
 import {
   ShoeModel,
@@ -27,6 +29,7 @@ import { disambiguateModels, getModelDisplayReference } from '../lib/disambiguat
 import { db } from '../db/indexedDb';
 import { useI18n } from '../i18n';
 import { LogoMark } from './Logo';
+import { AdvancedFilterModal, SearchFilterState } from './AdvancedFilterModal';
 
 interface SearchTabProps {
   models: ShoeModel[];
@@ -66,72 +69,105 @@ export const SearchTab: React.FC<SearchTabProps> = ({
     }
   };
 
-  const [isSearchEverywhere, setIsSearchEverywhere] = useState(false);
-  const [selectedAreaId, setSelectedAreaId] = useState<string>('all');
+  // Advanced Filter State
+  const [filterState, setFilterState] = useState<SearchFilterState>({
+    areaId: 'all',
+    isSearchEverywhere: false,
+    assignmentFilter: 'all',
+    sortBy: 'relevance',
+  });
+  const [isFilterModalOpen, setIsFilterModalOpen] = useState(false);
+
   const lastLoggedQueryRef = useRef<string>('');
   const searchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // Keep a ref to the latest search context so logging always has up-to-date data
-  // without re-creating timers when unrelated props or states change
-  const currentSearchContextRef = useRef({
-    query,
-    resultCount: 0,
-    matchedModelIds: [] as string[],
-    isSearchEverywhere,
-    warehouseId: activeWarehouse?.id || null,
-  });
+  // Active filter count
+  const activeFiltersCount =
+    (filterState.areaId !== 'all' ? 1 : 0) +
+    (filterState.isSearchEverywhere ? 1 : 0) +
+    (filterState.assignmentFilter !== 'all' ? 1 : 0) +
+    (filterState.sortBy !== 'relevance' ? 1 : 0);
 
-  // Only load/show models when user starts typing
+  // Only load/show models when user starts typing or when an area/scope filter is actively chosen
   const isTyping = query.trim().length > 0;
+  const isBrowsingFilter = filterState.areaId !== 'all';
+  const shouldComputeResults = isTyping || isBrowsingFilter;
 
-  // Disambiguate models only when query is present to avoid loading models immediately
+  // Disambiguate models only when searching or browsing to avoid heavy initial computations
   const disambiguatedList = useMemo(() => {
-    if (!isTyping) return [];
+    if (!shouldComputeResults) return [];
     return disambiguateModels(models, modelSections, sections, areas, warehouses);
-  }, [models, modelSections, sections, areas, warehouses, isTyping]);
+  }, [models, modelSections, sections, areas, warehouses, shouldComputeResults]);
 
-  // Available areas for filter chips
+  // Available areas for filtering
   const relevantAreas = useMemo(() => {
-    if (isSearchEverywhere || !activeWarehouse) {
+    if (filterState.isSearchEverywhere || !activeWarehouse) {
       return areas;
     }
     return areas.filter((a) => a.warehouse_id === activeWarehouse.id);
-  }, [areas, isSearchEverywhere, activeWarehouse]);
+  }, [areas, filterState.isSearchEverywhere, activeWarehouse]);
 
-  // Filtered results: only computed once the user starts typing
+  // Filtered results
   const searchResults = useMemo(() => {
-    if (!isTyping) return [];
+    if (!shouldComputeResults) return [];
     const q = query.trim().toUpperCase();
 
-    return disambiguatedList.filter((item) => {
-      // 1. Warehouse Scoping (FR-5.7)
-      if (!isSearchEverywhere && activeWarehouse) {
+    const filtered = disambiguatedList.filter((item) => {
+      // 1. Warehouse Scoping
+      if (!filterState.isSearchEverywhere && activeWarehouse) {
         if (item.model.warehouse_id !== activeWarehouse.id) return false;
       }
 
-      // 2. Area Filter (FR-5.6)
-      if (selectedAreaId !== 'all') {
-        const isInArea = item.sections.some((s) => s.area.id === selectedAreaId);
+      // 2. Area Filter
+      if (filterState.areaId !== 'all') {
+        const isInArea = item.sections.some((s) => s.area.id === filterState.areaId);
         if (!isInArea) return false;
       }
 
-      // 3. Search Query Match (Reference Code, Name, or Section Name)
-      const refMatch = item.model.reference_code.toUpperCase().includes(q);
-      const nameMatch = item.model.name?.toUpperCase().includes(q) || false;
-      const sectionMatch = item.sections.some((s) =>
-        s.section.name.toUpperCase().includes(q) || s.area.name.toUpperCase().includes(q)
-      );
+      // 3. Assignment / Stock location filter
+      if (filterState.assignmentFilter === 'assigned') {
+        if (item.sections.length === 0) return false;
+      } else if (filterState.assignmentFilter === 'unassigned') {
+        if (item.sections.length > 0) return false;
+      }
 
-      return refMatch || nameMatch || sectionMatch;
+      // 4. Search Query Match
+      if (isTyping) {
+        const refMatch = item.model.reference_code.toUpperCase().includes(q);
+        const nameMatch = item.model.name?.toUpperCase().includes(q) || false;
+        const sectionMatch = item.sections.some((s) =>
+          s.section.name.toUpperCase().includes(q) || s.area.name.toUpperCase().includes(q)
+        );
+        return refMatch || nameMatch || sectionMatch;
+      }
+
+      return true;
     });
-  }, [disambiguatedList, query, isSearchEverywhere, activeWarehouse, selectedAreaId, isTyping]);
+
+    // 5. Sorting
+    if (filterState.sortBy === 'ref_asc') {
+      filtered.sort((a, b) => a.model.reference_code.localeCompare(b.model.reference_code));
+    } else if (filterState.sortBy === 'name_asc') {
+      filtered.sort((a, b) => (a.model.name || '').localeCompare(b.model.name || ''));
+    }
+
+    return filtered;
+  }, [disambiguatedList, query, filterState, activeWarehouse, shouldComputeResults, isTyping]);
 
   // Keep search context ref updated on every render
+  const currentSearchContextRef = useRef({
+    query,
+    resultCount: searchResults.length,
+    matchedModelIds: searchResults.slice(0, 15).map((r) => r.model.id),
+    isSearchEverywhere: filterState.isSearchEverywhere,
+    warehouseId: activeWarehouse?.id || null,
+  });
+
   currentSearchContextRef.current = {
     query,
     resultCount: searchResults.length,
     matchedModelIds: searchResults.slice(0, 15).map((r) => r.model.id),
-    isSearchEverywhere,
+    isSearchEverywhere: filterState.isSearchEverywhere,
     warehouseId: activeWarehouse?.id || null,
   };
 
@@ -213,69 +249,71 @@ export const SearchTab: React.FC<SearchTabProps> = ({
 
   return (
     <div className="fade-in">
-      {/* Search Input Box */}
-      <div
-        style={{
-          display: 'flex',
-          alignItems: 'center',
-          gap: '0.6rem',
-          marginBottom: '0.85rem',
-          background: 'var(--bg-input)',
-          border: '1px solid var(--border-default)',
-          borderRadius: 'var(--radius-md)',
-          padding: '0.5rem 0.75rem',
-          transition: 'border-color 0.15s ease, box-shadow 0.15s ease',
-        }}
-      >
-        <Search size={20} style={{ color: 'var(--text-muted)', flexShrink: 0 }} />
-
-        <input
-          type="text"
-          value={query}
-          onChange={(e) => setQuery(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter') {
-              flushSearchLog();
-            }
-          }}
-          placeholder={t('search.placeholder')}
-          className="ref-code"
+      {/* Sleek Search Row: Input + Barcode Scanner + Filter Button */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: '0.45rem', marginBottom: '0.75rem' }}>
+        <div
           style={{
             flex: 1,
-            background: 'transparent',
-            border: 'none',
-            outline: 'none',
-            color: 'var(--text-primary)',
-            fontSize: '0.9375rem',
-            fontFamily: 'inherit',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '0.5rem',
+            background: 'var(--bg-input)',
+            border: '1px solid var(--border-default)',
+            borderRadius: 'var(--radius-md)',
+            padding: '0.5rem 0.75rem',
+            transition: 'all 0.15s ease',
           }}
-        />
+        >
+          <Search size={18} style={{ color: 'var(--text-muted)', flexShrink: 0 }} />
 
-        {query && (
-          <button
-            type="button"
-            onClick={() => {
-              if (searchTimerRef.current) {
-                clearTimeout(searchTimerRef.current);
-                searchTimerRef.current = null;
+          <input
+            type="text"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') {
+                flushSearchLog();
               }
-              setQuery('');
             }}
+            placeholder={t('search.placeholder')}
+            className="ref-code"
             style={{
+              flex: 1,
               background: 'transparent',
               border: 'none',
-              color: 'var(--text-muted)',
-              cursor: 'pointer',
-              padding: '4px',
-              display: 'flex',
-              alignItems: 'center',
+              outline: 'none',
+              color: 'var(--text-primary)',
+              fontSize: '0.9375rem',
+              fontFamily: 'inherit',
             }}
-          >
-            <X size={16} />
-          </button>
-        )}
+          />
 
-        {/* Camera Barcode Trigger Button (FR-5.4) */}
+          {query && (
+            <button
+              type="button"
+              onClick={() => {
+                if (searchTimerRef.current) {
+                  clearTimeout(searchTimerRef.current);
+                  searchTimerRef.current = null;
+                }
+                setQuery('');
+              }}
+              style={{
+                background: 'transparent',
+                border: 'none',
+                color: 'var(--text-muted)',
+                cursor: 'pointer',
+                padding: '4px',
+                display: 'flex',
+                alignItems: 'center',
+              }}
+            >
+              <X size={16} />
+            </button>
+          )}
+        </div>
+
+        {/* Camera Barcode Trigger Button */}
         <button
           type="button"
           onClick={onOpenBarcodeScanner}
@@ -283,194 +321,332 @@ export const SearchTab: React.FC<SearchTabProps> = ({
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
-            width: '40px',
-            height: '40px',
-            borderRadius: 'var(--radius-sm)',
+            width: '42px',
+            height: '42px',
+            borderRadius: 'var(--radius-md)',
             background: 'var(--accent)',
             color: '#FFFFFF',
             border: 'none',
             cursor: 'pointer',
             flexShrink: 0,
-            transition: 'background 0.15s ease',
+            boxShadow: '0 2px 8px rgba(245, 158, 11, 0.25)',
+            transition: 'transform 0.1s ease',
           }}
           title={t('search.scan_tooltip')}
         >
-          <ScanBarcode size={18} />
+          <ScanBarcode size={20} />
+        </button>
+
+        {/* Advanced Filter Button with Active Badge */}
+        <button
+          type="button"
+          onClick={() => setIsFilterModalOpen(true)}
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            width: '42px',
+            height: '42px',
+            borderRadius: 'var(--radius-md)',
+            background: activeFiltersCount > 0 ? 'var(--accent-light)' : 'var(--bg-input)',
+            color: activeFiltersCount > 0 ? 'var(--accent-dark)' : 'var(--text-secondary)',
+            border: `1px solid ${activeFiltersCount > 0 ? 'var(--accent)' : 'var(--border-default)'}`,
+            cursor: 'pointer',
+            flexShrink: 0,
+            position: 'relative',
+            transition: 'all 0.15s ease',
+          }}
+          title="Filtres avancés"
+        >
+          <SlidersHorizontal size={18} />
+          {activeFiltersCount > 0 && (
+            <span
+              style={{
+                position: 'absolute',
+                top: '-4px',
+                right: '-4px',
+                width: '18px',
+                height: '18px',
+                borderRadius: '50%',
+                background: 'var(--accent)',
+                color: '#FFFFFF',
+                fontSize: '0.68rem',
+                fontWeight: 800,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                boxShadow: '0 2px 5px rgba(0,0,0,0.15)',
+              }}
+            >
+              {activeFiltersCount}
+            </span>
+          )}
         </button>
       </div>
 
-      {/* Scope Controls & Filter Chips */}
-      <div
-        style={{
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          flexWrap: 'wrap',
-          gap: '0.5rem',
-          marginBottom: '1rem',
-        }}
-      >
-        {/* Scope Toggle: Active Warehouse vs Everywhere (FR-5.7) */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
-          <button
-            type="button"
-            onClick={() => setIsSearchEverywhere(false)}
-            style={{
-              display: 'inline-flex',
-              alignItems: 'center',
-              gap: '0.3rem',
-              padding: '0.3rem 0.65rem',
-              fontSize: '0.75rem',
-              fontWeight: 600,
-              borderRadius: 'var(--radius-full)',
-              background: !isSearchEverywhere ? 'var(--accent-light)' : 'var(--bg-card)',
-              color: !isSearchEverywhere ? 'var(--accent-dark)' : 'var(--text-muted)',
-              border: `1px solid ${!isSearchEverywhere ? 'var(--accent)' : 'var(--border-default)'}`,
-              cursor: 'pointer',
-              transition: 'all 0.15s ease',
-            }}
-          >
-            <MapPin size={12} />
-            <span>{activeWarehouse ? activeWarehouse.name.split(' ')[0] : t('header.active_warehouse')}</span>
-          </button>
-
-          <button
-            type="button"
-            onClick={() => setIsSearchEverywhere(true)}
-            style={{
-              display: 'inline-flex',
-              alignItems: 'center',
-              gap: '0.3rem',
-              padding: '0.3rem 0.65rem',
-              fontSize: '0.75rem',
-              fontWeight: 600,
-              borderRadius: 'var(--radius-full)',
-              background: isSearchEverywhere ? 'var(--info-light)' : 'var(--bg-card)',
-              color: isSearchEverywhere ? 'var(--info)' : 'var(--text-muted)',
-              border: `1px solid ${isSearchEverywhere ? 'var(--info)' : 'var(--border-default)'}`,
-              cursor: 'pointer',
-              transition: 'all 0.15s ease',
-            }}
-            title={t('search.search_everywhere')}
-          >
-            <Globe size={12} />
-            <span>{t('search.search_everywhere')} ({warehouses.length})</span>
-          </button>
-        </div>
-
-        {/* Result Counter */}
-        <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
-          {isTyping ? t('search.results_count', { count: searchResults.length }) : ''}
-        </span>
-      </div>
-
-      {/* Area Filter Chips */}
-      {relevantAreas.length > 0 && (
+      {/* Active Filters Summary Bar (Only shown when filters are engaged) */}
+      {activeFiltersCount > 0 && (
         <div
           style={{
             display: 'flex',
-            gap: '0.35rem',
-            overflowX: 'auto',
-            paddingBottom: '0.5rem',
-            marginBottom: '1rem',
+            alignItems: 'center',
+            gap: '0.4rem',
+            flexWrap: 'wrap',
+            marginBottom: '0.85rem',
+            padding: '0.4rem 0.6rem',
+            background: 'var(--bg-card)',
+            borderRadius: 'var(--radius-sm)',
+            border: '1px solid var(--border-default)',
+            fontSize: '0.75rem',
           }}
         >
-          <button
-            type="button"
-            onClick={() => setSelectedAreaId('all')}
-            style={{
-              padding: '0.3rem 0.7rem',
-              borderRadius: 'var(--radius-full)',
-              fontSize: '0.75rem',
-              fontWeight: 600,
-              background: selectedAreaId === 'all' ? 'var(--text-primary)' : 'var(--bg-card)',
-              color: selectedAreaId === 'all' ? '#FFFFFF' : 'var(--text-secondary)',
-              border: `1px solid ${selectedAreaId === 'all' ? 'var(--text-primary)' : 'var(--border-default)'}`,
-              cursor: 'pointer',
-              whiteSpace: 'nowrap',
-              transition: 'all 0.15s ease',
-            }}
-          >
-            {t('search.all_zones')}
-          </button>
-          {relevantAreas.map((a) => (
-            <button
-              key={a.id}
-              type="button"
-              onClick={() => setSelectedAreaId(a.id)}
+          <span style={{ color: 'var(--text-muted)', fontWeight: 600 }}>Filtres :</span>
+
+          {filterState.areaId !== 'all' && (
+            <span
               style={{
-                padding: '0.3rem 0.7rem',
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '0.25rem',
+                padding: '0.2rem 0.5rem',
                 borderRadius: 'var(--radius-full)',
-                fontSize: '0.75rem',
-                fontWeight: 600,
-                background: selectedAreaId === a.id ? 'var(--accent)' : 'var(--bg-card)',
-                color: selectedAreaId === a.id ? '#FFFFFF' : 'var(--text-secondary)',
-                border: `1px solid ${selectedAreaId === a.id ? 'var(--accent)' : 'var(--border-default)'}`,
-                cursor: 'pointer',
-                whiteSpace: 'nowrap',
-                fontFamily: 'var(--font-sans)',
-                transition: 'all 0.15s ease',
+                background: 'var(--accent-light)',
+                color: 'var(--accent-dark)',
+                fontWeight: 700,
               }}
             >
-              {a.name}
-            </button>
-          ))}
+              {relevantAreas.find((a) => a.id === filterState.areaId)?.name || 'Zone'}
+              <X
+                size={12}
+                style={{ cursor: 'pointer' }}
+                onClick={() => setFilterState((prev) => ({ ...prev, areaId: 'all' }))}
+              />
+            </span>
+          )}
+
+          {filterState.isSearchEverywhere && (
+            <span
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '0.25rem',
+                padding: '0.2rem 0.5rem',
+                borderRadius: 'var(--radius-full)',
+                background: 'var(--info-light)',
+                color: 'var(--info)',
+                fontWeight: 700,
+              }}
+            >
+              Tous les dépôts
+              <X
+                size={12}
+                style={{ cursor: 'pointer' }}
+                onClick={() => setFilterState((prev) => ({ ...prev, isSearchEverywhere: false }))}
+              />
+            </span>
+          )}
+
+          {filterState.assignmentFilter !== 'all' && (
+            <span
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '0.25rem',
+                padding: '0.2rem 0.5rem',
+                borderRadius: 'var(--radius-full)',
+                background: 'var(--bg-input)',
+                color: 'var(--text-primary)',
+                fontWeight: 700,
+              }}
+            >
+              {filterState.assignmentFilter === 'assigned' ? 'En rayon' : 'Non assigné'}
+              <X
+                size={12}
+                style={{ cursor: 'pointer' }}
+                onClick={() => setFilterState((prev) => ({ ...prev, assignmentFilter: 'all' }))}
+              />
+            </span>
+          )}
+
+          {filterState.sortBy !== 'relevance' && (
+            <span
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '0.25rem',
+                padding: '0.2rem 0.5rem',
+                borderRadius: 'var(--radius-full)',
+                background: 'var(--bg-input)',
+                color: 'var(--text-primary)',
+                fontWeight: 700,
+              }}
+            >
+              Tri : {filterState.sortBy === 'ref_asc' ? 'Réf (A-Z)' : 'Nom (A-Z)'}
+              <X
+                size={12}
+                style={{ cursor: 'pointer' }}
+                onClick={() => setFilterState((prev) => ({ ...prev, sortBy: 'relevance' }))}
+              />
+            </span>
+          )}
+
+          <button
+            type="button"
+            onClick={() =>
+              setFilterState({
+                areaId: 'all',
+                isSearchEverywhere: false,
+                assignmentFilter: 'all',
+                sortBy: 'relevance',
+              })
+            }
+            style={{
+              marginLeft: 'auto',
+              background: 'transparent',
+              border: 'none',
+              color: 'var(--text-muted)',
+              cursor: 'pointer',
+              fontWeight: 600,
+              padding: '0 0.3rem',
+            }}
+          >
+            Effacer
+          </button>
+        </div>
+      )}
+
+      {/* Results Header (Counter when searching or browsing) */}
+      {shouldComputeResults && (
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem' }}>
+          <span style={{ fontSize: '0.82rem', fontWeight: 700, color: 'var(--text-secondary)' }}>
+            {searchResults.length} modèle(s) trouvé(s)
+          </span>
+          {activeWarehouse && !filterState.isSearchEverywhere && (
+            <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
+              Entrepôt : {activeWarehouse.name}
+            </span>
+          )}
         </div>
       )}
 
       {/* Results Section */}
       <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-        {/* State 1: Idle (User has not started typing yet) -> Models are NOT loaded/shown */}
-        {!isTyping && (
-          <div
-            className="card fade-in"
-            style={{
-              padding: '2.5rem 1.5rem',
-              textAlign: 'center',
-              marginTop: '0.25rem',
-            }}
-          >
+        {/* State 1: Idle (User has not started searching or browsing yet) */}
+        {!shouldComputeResults && (
+          <div className="fade-in" style={{ display: 'flex', flexDirection: 'column', gap: '0.85rem' }}>
+            {/* Quick Scanner Hero Card */}
             <div
+              className="card"
               style={{
-                display: 'inline-flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                margin: '0 auto 1.25rem auto',
-                borderRadius: '16px',
-                boxShadow: '0 8px 24px rgba(15, 23, 42, 0.12)',
+                padding: '1.5rem 1.25rem',
+                textAlign: 'center',
+                background: 'linear-gradient(180deg, #FFFFFF 0%, #FFFBEB 100%)',
+                border: '1px solid #FDE68A',
+                borderRadius: 'var(--radius-lg)',
               }}
             >
-              <LogoMark size={64} />
+              <div
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  margin: '0 auto 0.75rem auto',
+                  borderRadius: '16px',
+                  boxShadow: '0 8px 24px rgba(245, 158, 11, 0.2)',
+                }}
+              >
+                <LogoMark size={56} />
+              </div>
+
+              <h3 style={{ fontSize: '1.05rem', fontWeight: 800, color: 'var(--text-primary)', marginBottom: '0.3rem' }}>
+                {t('search.prompt_title')}
+              </h3>
+              <p style={{ color: 'var(--text-secondary)', fontSize: '0.82rem', maxWidth: '380px', margin: '0 auto 1rem auto', lineHeight: 1.45 }}>
+                {t('search.prompt_desc')}
+              </p>
+
+              <button
+                type="button"
+                onClick={onOpenBarcodeScanner}
+                className="btn btn-primary"
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '0.45rem',
+                  padding: '0.65rem 1.25rem',
+                  fontSize: '0.88rem',
+                  fontWeight: 700,
+                  margin: '0 auto',
+                  boxShadow: '0 4px 14px rgba(245, 158, 11, 0.35)',
+                }}
+              >
+                <ScanBarcode size={18} />
+                <span>{t('search.scan_barcode')}</span>
+              </button>
             </div>
 
-            <h3 style={{ fontSize: '1.05rem', fontWeight: 700, color: 'var(--text-primary)', marginBottom: '0.4rem' }}>
-              {t('search.prompt_title')}
-            </h3>
-            <p style={{ color: 'var(--text-secondary)', fontSize: '0.875rem', maxWidth: '420px', margin: '0 auto 1.25rem auto', lineHeight: 1.5 }}>
-              {t('search.prompt_desc')}
-            </p>
+            {/* Quick Zone Shortcuts */}
+            {relevantAreas.length > 0 && (
+              <div className="card" style={{ padding: '1rem' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.65rem' }}>
+                  <span style={{ fontSize: '0.82rem', fontWeight: 800, color: 'var(--text-primary)' }}>
+                    Explorer par zone
+                  </span>
+                  <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>
+                    Accès rapide aux rayons
+                  </span>
+                </div>
 
-            <button
-              type="button"
-              onClick={onOpenBarcodeScanner}
-              className="btn btn-secondary"
-              style={{
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: '0.45rem',
-                padding: '0.5rem 1rem',
-                fontSize: '0.8125rem',
-                margin: '0 auto',
-              }}
-            >
-              <ScanBarcode size={16} />
-              <span>{t('search.scan_barcode')}</span>
-            </button>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '0.5rem' }}>
+                  {relevantAreas.map((area) => {
+                    const areaSections = sections.filter((s) => s.area_id === area.id);
+                    return (
+                      <button
+                        key={area.id}
+                        type="button"
+                        onClick={() => setFilterState((prev) => ({ ...prev, areaId: area.id }))}
+                        style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'space-between',
+                          padding: '0.65rem 0.75rem',
+                          background: 'var(--bg-page)',
+                          border: '1px solid var(--border-default)',
+                          borderRadius: 'var(--radius-sm)',
+                          cursor: 'pointer',
+                          textAlign: 'left',
+                          transition: 'all 0.15s ease',
+                        }}
+                      >
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                          <MapPin size={14} style={{ color: 'var(--accent)' }} />
+                          <span style={{ fontWeight: 700, fontSize: '0.82rem', color: 'var(--text-primary)' }}>
+                            {area.name}
+                          </span>
+                        </div>
+                        <span
+                          style={{
+                            fontSize: '0.72rem',
+                            fontWeight: 600,
+                            padding: '0.15rem 0.45rem',
+                            borderRadius: 'var(--radius-full)',
+                            background: 'var(--bg-input)',
+                            color: 'var(--text-secondary)',
+                          }}
+                        >
+                          {areaSections.length} r.
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
           </div>
         )}
 
-        {/* State 2: User started typing -> Show matching models */}
-        {isTyping &&
+        {/* State 2: User searching or browsing -> Show matching models */}
+        {shouldComputeResults &&
           searchResults.map((item) => {
             const displayTitle = getModelDisplayReference(
               item.model.reference_code,
@@ -584,7 +760,7 @@ export const SearchTab: React.FC<SearchTabProps> = ({
                           <MapPin size={11} />
                           <span>
                             <strong>{loc.section.name}</strong> ({loc.area.name})
-                            {isSearchEverywhere && ` — ${loc.warehouse.name.split(' ')[0]}`}
+                            {filterState.isSearchEverywhere && ` — ${loc.warehouse.name.split(' ')[0]}`}
                           </span>
                         </span>
                       ))
@@ -632,12 +808,12 @@ export const SearchTab: React.FC<SearchTabProps> = ({
             );
           })}
 
-        {/* State 3: User typed but zero matches found */}
-        {isTyping && searchResults.length === 0 && (
+        {/* State 3: Searching or browsing with zero matches */}
+        {shouldComputeResults && searchResults.length === 0 && (
           <div
             className="card fade-in"
             style={{
-              padding: '3rem 1.5rem',
+              padding: '2.5rem 1.5rem',
               textAlign: 'center',
               marginTop: '0.5rem',
             }}
@@ -665,20 +841,61 @@ export const SearchTab: React.FC<SearchTabProps> = ({
               {t('search.no_results_desc')}
             </p>
 
-            {!isSearchEverywhere && (
-              <button
-                type="button"
-                onClick={() => setIsSearchEverywhere(true)}
-                className="btn btn-secondary"
-                style={{ gap: '0.4rem' }}
-              >
-                <Globe size={15} />
-                <span>{t('search.search_everywhere')}</span>
-              </button>
-            )}
+            <div style={{ display: 'flex', gap: '0.5rem', justifyContent: 'center', flexWrap: 'wrap' }}>
+              {!filterState.isSearchEverywhere && (
+                <button
+                  type="button"
+                  onClick={() => setFilterState((prev) => ({ ...prev, isSearchEverywhere: true }))}
+                  className="btn btn-secondary"
+                  style={{ gap: '0.4rem', fontSize: '0.8rem' }}
+                >
+                  <Globe size={14} />
+                  <span>{t('search.search_everywhere')}</span>
+                </button>
+              )}
+
+              {activeFiltersCount > 0 && (
+                <button
+                  type="button"
+                  onClick={() =>
+                    setFilterState({
+                      areaId: 'all',
+                      isSearchEverywhere: false,
+                      assignmentFilter: 'all',
+                      sortBy: 'relevance',
+                    })
+                  }
+                  className="btn btn-secondary"
+                  style={{ gap: '0.4rem', fontSize: '0.8rem' }}
+                >
+                  <RotateCcw size={14} />
+                  <span>Réinitialiser les filtres</span>
+                </button>
+              )}
+            </div>
           </div>
         )}
       </div>
+
+      {/* Advanced Filter Modal */}
+      <AdvancedFilterModal
+        isOpen={isFilterModalOpen}
+        onClose={() => setIsFilterModalOpen(false)}
+        filters={filterState}
+        onApplyFilters={setFilterState}
+        onResetFilters={() =>
+          setFilterState({
+            areaId: 'all',
+            isSearchEverywhere: false,
+            assignmentFilter: 'all',
+            sortBy: 'relevance',
+          })
+        }
+        areas={relevantAreas}
+        activeWarehouse={activeWarehouse}
+        totalWarehousesCount={warehouses.length}
+        totalResultsCount={searchResults.length}
+      />
     </div>
   );
 };

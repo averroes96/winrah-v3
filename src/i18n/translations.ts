@@ -18,6 +18,7 @@ export const translations = {
     'nav.add': 'إضافة',
     'nav.structure': 'المستودع',
     'nav.sync': 'مزامنة',
+    'nav.settings': 'الإعدادات',
 
     // Header
     'header.active_warehouse': 'المستودع النشط',
@@ -320,6 +321,7 @@ export const translations = {
     'nav.add': 'Ajouter',
     'nav.structure': 'Structure',
     'nav.sync': 'Synchro',
+    'nav.settings': 'Paramètres',
 
     // Header
     'header.active_warehouse': 'Dépôt Actif',

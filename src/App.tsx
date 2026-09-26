@@ -12,13 +12,15 @@ import {
   Plus,
   QrCode,
   ScanBarcode,
+  Settings,
 } from 'lucide-react';
 import { App as CapApp } from '@capacitor/app';
 import { Header } from './components/Header';
 import { SearchTab } from './components/SearchTab';
 import { TransfersTab } from './components/TransfersTab';
 import { CatalogTab } from './components/CatalogTab';
-import { SyncTab } from './components/SyncTab';
+import { SettingsTab } from './components/SettingsTab';
+import { CsvImportModal } from './components/CsvImportModal';
 
 import { WarehouseSelectorModal } from './components/WarehouseSelectorModal';
 import { BarcodeScannerModal } from './components/BarcodeScannerModal';
@@ -43,12 +45,13 @@ import {
   DisambiguatedModelResult,
 } from './types';
 
-type ActiveTab = 'search' | 'transfers' | 'catalog' | 'sync';
+type ActiveTab = 'search' | 'transfers' | 'catalog' | 'settings';
 
 export function App() {
   const { t } = useI18n();
   const [activeTab, setActiveTab] = useState<ActiveTab>('search');
   const [isQuickAddOpen, setIsQuickAddOpen] = useState(false);
+  const [isCsvImportModalOpen, setIsCsvImportModalOpen] = useState(false);
   const [scannerTargetCallback, setScannerTargetCallback] = useState<((code: string) => void) | null>(null);
   const [quickAddInitialRef, setQuickAddInitialRef] = useState('');
 
@@ -266,7 +269,7 @@ export function App() {
         activeWarehouse={activeWarehouse}
         warehouses={warehouses}
         onOpenWarehouseModal={() => setIsWarehouseModalOpen(true)}
-        onOpenSyncTab={() => setActiveTab('sync')}
+        onOpenSyncTab={() => setActiveTab('settings')}
         onRefreshData={refreshData}
       />
 
@@ -322,9 +325,17 @@ export function App() {
           />
         )}
 
-        {activeTab === 'sync' && (
-          <SyncTab
+        {activeTab === 'settings' && (
+          <SettingsTab
+            activeWarehouse={activeWarehouse}
+            warehouses={warehouses}
+            areas={areas}
+            sections={sections}
+            models={models}
+            modelSections={modelSections}
+            onOpenWarehouseModal={() => setIsWarehouseModalOpen(true)}
             onOpenDevicePairing={() => setIsPairingModalOpen(true)}
+            onOpenImportModal={() => setIsCsvImportModalOpen(true)}
             onRefreshData={refreshData}
           />
         )}
@@ -410,11 +421,11 @@ export function App() {
 
         <button
           type="button"
-          onClick={() => setActiveTab('sync')}
-          className={`nav-item ${activeTab === 'sync' ? 'active' : ''}`}
+          onClick={() => setActiveTab('settings')}
+          className={`nav-item ${activeTab === 'settings' ? 'active' : ''}`}
         >
-          <Database size={20} />
-          <span>{t('nav.sync')}</span>
+          <Settings size={20} />
+          <span>{t('nav.settings')}</span>
         </button>
       </nav>
 
@@ -481,6 +492,14 @@ export function App() {
           });
           setIsBarcodeModalOpen(true);
         }}
+      />
+
+      {/* CSV Import Modal */}
+      <CsvImportModal
+        isOpen={isCsvImportModalOpen}
+        onClose={() => setIsCsvImportModalOpen(false)}
+        onSuccess={refreshData}
+        activeWarehouse={activeWarehouse}
       />
     </div>
   );

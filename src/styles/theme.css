@@ -299,15 +299,16 @@ body {
   bottom: 0;
   left: 0;
   right: 0;
-  height: 64px;
-  background: var(--bg-card);
+  background: #FFFFFF !important;
   border-top: 1px solid var(--border-default);
+  box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.08);
   display: flex;
   justify-content: space-around;
   align-items: center;
-  z-index: 100;
-  padding: 0 0.5rem;
-  padding-bottom: env(safe-area-inset-bottom, 0px);
+  z-index: 1000;
+  padding: 8px 0.5rem calc(max(env(safe-area-inset-bottom, 0px), 18px)) 0.5rem;
+  height: auto;
+  min-height: calc(64px + max(env(safe-area-inset-bottom, 0px), 18px));
 }
 
 .nav-item {
@@ -350,12 +351,12 @@ body {
 .app-container {
   max-width: 600px;
   margin: 0 auto;
-  padding: 1rem 1rem 84px 1rem;
+  padding: 0.75rem 1rem calc(96px + max(env(safe-area-inset-bottom, 0px), 24px)) 1rem;
 }
 
 @media (min-width: 768px) {
   .app-container {
-    padding: 1.5rem 1.5rem 100px 1.5rem;
+    padding: 1.5rem 1.5rem calc(110px + max(env(safe-area-inset-bottom, 0px), 24px)) 1.5rem;
   }
 }
 
