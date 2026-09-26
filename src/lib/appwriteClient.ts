@@ -287,6 +287,9 @@ export function sanitizeSearchLog(log: SearchLog) {
     warehouse_id: log.warehouse_id || null,
     created_at: log.created_at || new Date().toISOString(),
     is_everywhere: Boolean(log.is_everywhere),
+    matched_model_ids: Array.isArray(log.matched_model_ids) ? log.matched_model_ids.slice(0, 15) : [],
+    selected_model_id: log.selected_model_id || null,
+    from_section_id: log.from_section_id || null,
   };
 }
 

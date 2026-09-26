@@ -113,7 +113,7 @@ export interface SyncLog {
   error_message?: string | null;
 }
 
-// 9. Search_Log (Analytics)
+// 9. Search_Log (Analytics & Smart Relocation Engine)
 export interface SearchLog {
   id: string;
   device_id: string;
@@ -122,6 +122,9 @@ export interface SearchLog {
   filters?: Record<string, any> | null;
   result_count: number;
   is_everywhere: boolean;
+  matched_model_ids?: string[];
+  selected_model_id?: string | null;
+  from_section_id?: string | null;
   sync_status?: 'pending' | 'synced';
   created_at: string;
 }

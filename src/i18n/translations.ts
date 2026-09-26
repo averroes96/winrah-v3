@@ -77,9 +77,21 @@ export const translations = {
     'transfers.to': 'إلى',
     'transfers.operator': 'المشغّل',
     'transfers.date': 'التاريخ',
-    'transfers.model': 'الموديل',
     'transfers.badge_success': 'ناجح',
     'transfers.unassigned': 'بدون رف',
+
+    // Smart Transfer Suggestions
+    'smart_transfers.title': 'اقتراحات النقل والتموضع الذكية',
+    'smart_transfers.subtitle': 'تحسين مواقع الموديلات بناءً على وتيرة البحث (آخر 30 يوماً) وسعة الرفوف',
+    'smart_transfers.apply': 'تطبيق النقل',
+    'smart_transfers.applied': 'تم التحديد',
+    'smart_transfers.dismiss': 'تجاهل',
+    'smart_transfers.searches_30d': '{count} بحث (30 يوم)',
+    'smart_transfers.target_capacity': 'سعة الرف: {current}/{capacity} موديل ({remaining} مكان شاغر)',
+    'smart_transfers.zone_a_fallback_badge': 'المنطقة A ممتلئة ➔ توجيه إلى B',
+    'smart_transfers.fast_mover_badge': 'طلب مرتفع ➔ المنطقة A',
+    'smart_transfers.dormant_badge': 'تفريغ مساحة في المنطقة A',
+    'smart_transfers.empty': 'توزيع الموديلات الحالي متناسق مع وتيرة البحث وسعة الرفوف.',
 
     // Structure / Catalog Tab
     'catalog.subtab.structure': 'الهيكل والمناطق',
@@ -370,6 +382,19 @@ export const translations = {
     'transfers.model': 'Modèle',
     'transfers.badge_success': 'Succès',
     'transfers.unassigned': 'Sans rayon',
+
+    // Smart Transfer Suggestions
+    'smart_transfers.title': 'Suggestions Intelligentes de Réorganisation',
+    'smart_transfers.subtitle': 'Optimisation des emplacements selon les recherches (30j) et la capacité des rayons',
+    'smart_transfers.apply': 'Appliquer le transfert',
+    'smart_transfers.applied': 'Sélectionné',
+    'smart_transfers.dismiss': 'Ignorer',
+    'smart_transfers.searches_30d': '{count} recherche(s) (30j)',
+    'smart_transfers.target_capacity': 'Capacité rayon : {current}/{capacity} modèles ({remaining} libres)',
+    'smart_transfers.zone_a_fallback_badge': 'Zone A saturée ➔ Déviation Zone B',
+    'smart_transfers.fast_mover_badge': 'Forte demande ➔ Zone A',
+    'smart_transfers.dormant_badge': 'Libérer espace Zone A',
+    'smart_transfers.empty': 'Aucune suggestion pour le moment. L\'agencement actuel est bien équilibré avec la demande.',
 
     // Structure / Catalog Tab
     'catalog.subtab.structure': 'Zones & Rayons',

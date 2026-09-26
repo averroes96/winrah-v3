@@ -311,6 +311,9 @@ function sanitizeSearchLog(sl: SearchLog) {
     warehouse_id: sl.warehouse_id ?? null,
     created_at: sl.created_at || new Date().toISOString(),
     is_everywhere: Boolean(sl.is_everywhere),
+    matched_model_ids: Array.isArray(sl.matched_model_ids) ? sl.matched_model_ids.slice(0, 15) : [],
+    selected_model_id: sl.selected_model_id ?? null,
+    from_section_id: sl.from_section_id ?? null,
   };
 }
 

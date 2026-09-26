@@ -76,6 +76,7 @@ export const SearchTab: React.FC<SearchTabProps> = ({
   const currentSearchContextRef = useRef({
     query,
     resultCount: 0,
+    matchedModelIds: [] as string[],
     isSearchEverywhere,
     warehouseId: activeWarehouse?.id || null,
   });
@@ -129,12 +130,13 @@ export const SearchTab: React.FC<SearchTabProps> = ({
   currentSearchContextRef.current = {
     query,
     resultCount: searchResults.length,
+    matchedModelIds: searchResults.slice(0, 15).map((r) => r.model.id),
     isSearchEverywhere,
     warehouseId: activeWarehouse?.id || null,
   };
 
-  // Immediate or debounced flush helper
-  const flushSearchLog = useCallback(async () => {
+  // Immediate or debounced flush helper with optional model selection tracking
+  const flushSearchLog = useCallback(async (extra?: { selectedModelId?: string; fromSectionId?: string }) => {
     if (searchTimerRef.current) {
       clearTimeout(searchTimerRef.current);
       searchTimerRef.current = null;
@@ -146,8 +148,10 @@ export const SearchTab: React.FC<SearchTabProps> = ({
     // Query must be at least 2 characters to be a meaningful search query
     if (trimmed.length < 2) return;
 
-    // Prevent duplicate logs if the query hasn't changed since the last logged search
-    if (trimmed.toUpperCase() === lastLoggedQueryRef.current.toUpperCase()) return;
+    // Prevent duplicate logs if the query hasn't changed since the last logged search,
+    // unless an explicit model selection/interaction is being recorded
+    const isSameQuery = trimmed.toUpperCase() === lastLoggedQueryRef.current.toUpperCase();
+    if (isSameQuery && !extra?.selectedModelId) return;
 
     lastLoggedQueryRef.current = trimmed;
 
@@ -161,6 +165,9 @@ export const SearchTab: React.FC<SearchTabProps> = ({
           query_text: trimmed,
           result_count: ctx.resultCount,
           is_everywhere: ctx.isSearchEverywhere,
+          matched_model_ids: ctx.matchedModelIds,
+          selected_model_id: extra?.selectedModelId || null,
+          from_section_id: extra?.fromSectionId || null,
           sync_status: 'pending',
           created_at: new Date().toISOString(),
         },
@@ -484,7 +491,10 @@ export const SearchTab: React.FC<SearchTabProps> = ({
                   cursor: 'pointer',
                 }}
                 onClick={() => {
-                  flushSearchLog();
+                  flushSearchLog({
+                    selectedModelId: item.model.id,
+                    fromSectionId: item.sections[0]?.section.id,
+                  });
                   onViewModelDetails(item);
                 }}
               >
@@ -600,7 +610,10 @@ export const SearchTab: React.FC<SearchTabProps> = ({
                     type="button"
                     onClick={(e) => {
                       e.stopPropagation();
-                      flushSearchLog();
+                      flushSearchLog({
+                        selectedModelId: item.model.id,
+                        fromSectionId: item.sections[0]?.section.id,
+                      });
                       onInitiateTransfer(item.model, item.sections[0]?.section.id);
                     }}
                     className="btn btn-primary"

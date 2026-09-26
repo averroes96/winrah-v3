@@ -17,6 +17,8 @@ import {
   X,
   ArrowRight,
   Package,
+  Sparkles,
+  Flame,
 } from 'lucide-react';
 import {
   ShoeModel,
@@ -25,10 +27,15 @@ import {
   Area,
   Warehouse,
   TransferLog,
+  SearchLog,
 } from '../types';
 import { db } from '../db/indexedDb';
 import { SectionSearchSelect } from './SectionSearchSelect';
 import { useI18n } from '../i18n';
+import {
+  computeSmartTransferSuggestions,
+  SmartTransferSuggestion,
+} from '../lib/smartTransferEngine';
 
 interface TransfersTabProps {
   models: ShoeModel[];
@@ -38,6 +45,7 @@ interface TransfersTabProps {
   warehouses: Warehouse[];
   activeWarehouse: Warehouse | null;
   transfers: TransferLog[];
+  searchLogs?: SearchLog[];
   onRefreshData: () => void;
 }
 
@@ -49,6 +57,7 @@ export const TransfersTab: React.FC<TransfersTabProps> = ({
   warehouses: _warehouses,
   activeWarehouse,
   transfers,
+  searchLogs = [],
   onRefreshData,
 }) => {
   const { t } = useI18n();
@@ -84,6 +93,36 @@ export const TransfersTab: React.FC<TransfersTabProps> = ({
   // Map lookups
   const modelMap = useMemo(() => new Map(models.map((m) => [m.id, m])), [models]);
   const sectionMap = useMemo(() => new Map(sections.map((s) => [s.id, s])), [sections]);
+
+  // Smart Relocation Suggestions based on 30-day search velocity and section capacities
+  const [dismissedSuggestionIds, setDismissedSuggestionIds] = useState<Set<string>>(new Set());
+  const [appliedSuggestionId, setAppliedSuggestionId] = useState<string | null>(null);
+
+  const smartSuggestions = useMemo(() => {
+    if (!searchLogs || searchLogs.length === 0) return [];
+    return computeSmartTransferSuggestions({
+      searchLogs,
+      models,
+      modelSections,
+      sections,
+      areas,
+      warehouseId: activeWarehouse?.id,
+      maxSuggestions: 5,
+      lookbackDays: 30,
+    }).filter((s) => !dismissedSuggestionIds.has(s.id));
+  }, [searchLogs, models, modelSections, sections, areas, activeWarehouse, dismissedSuggestionIds]);
+
+  const handleApplySuggestion = (sug: SmartTransferSuggestion) => {
+    setQueuedModelIds([sug.model.id]);
+    setTargetSectionId(sug.targetSection.id);
+    setAppliedSuggestionId(sug.id);
+    setTimeout(() => setAppliedSuggestionId(null), 3000);
+
+    const targetElement = document.getElementById('transfer-workflow-card');
+    if (targetElement) {
+      targetElement.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+  };
 
   // Fast search filter: only computes and renders when user types!
   const searchResults = useMemo(() => {
@@ -291,8 +330,255 @@ export const TransfersTab: React.FC<TransfersTabProps> = ({
         </div>
       )}
 
+      {/* Smart Relocation Suggestions Card (30-day velocity & section model capacity optimization) */}
+      {smartSuggestions.length > 0 && (
+        <div
+          className="card fade-in"
+          style={{
+            padding: '1.15rem 1.25rem',
+            marginBottom: '1rem',
+            background: 'linear-gradient(135deg, #FFFBEB 0%, #FFFFFF 100%)',
+            border: '1px solid #FDE68A',
+            borderRadius: 'var(--radius-lg)',
+            boxShadow: 'var(--shadow-subtle)',
+          }}
+        >
+          {/* Header */}
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              marginBottom: '0.85rem',
+              flexWrap: 'wrap',
+              gap: '0.5rem',
+            }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
+              <div
+                style={{
+                  width: '34px',
+                  height: '34px',
+                  borderRadius: 'var(--radius-sm)',
+                  background: 'var(--accent)',
+                  color: '#FFFFFF',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  boxShadow: '0 2px 8px rgba(245, 158, 11, 0.35)',
+                }}
+              >
+                <Sparkles size={18} />
+              </div>
+              <div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                  <h3 style={{ fontSize: '0.95rem', fontWeight: 800, color: 'var(--text-primary)', margin: 0 }}>
+                    {t('smart_transfers.title')}
+                  </h3>
+                  <span
+                    style={{
+                      background: 'var(--accent)',
+                      color: '#FFFFFF',
+                      fontSize: '0.65rem',
+                      fontWeight: 800,
+                      padding: '0.1rem 0.4rem',
+                      borderRadius: 'var(--radius-full)',
+                    }}
+                  >
+                    {smartSuggestions.length}
+                  </span>
+                </div>
+                <p style={{ fontSize: '0.72rem', color: 'var(--text-secondary)', margin: '2px 0 0 0' }}>
+                  {t('smart_transfers.subtitle')}
+                </p>
+              </div>
+            </div>
+          </div>
+
+          {/* Suggestions List */}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.65rem' }}>
+            {smartSuggestions.map((sug) => {
+              const isApplied = appliedSuggestionId === sug.id;
+              return (
+                <div
+                  key={sug.id}
+                  style={{
+                    display: 'flex',
+                    flexDirection: 'column',
+                    padding: '0.75rem 0.9rem',
+                    borderRadius: 'var(--radius-md)',
+                    background: '#FFFFFF',
+                    border: '1px solid var(--border-default)',
+                    boxShadow: '0 1px 3px rgba(0, 0, 0, 0.04)',
+                    gap: '0.55rem',
+                  }}
+                >
+                  <div
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                      flexWrap: 'wrap',
+                      gap: '0.5rem',
+                    }}
+                  >
+                    {/* Model Info */}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem' }}>
+                      {sug.model.photo_url ? (
+                        <img
+                          src={sug.model.photo_url}
+                          alt={sug.model.reference_code}
+                          style={{
+                            width: '40px',
+                            height: '40px',
+                            borderRadius: 'var(--radius-sm)',
+                            objectFit: 'cover',
+                            border: '1px solid var(--border-default)',
+                          }}
+                        />
+                      ) : (
+                        <div
+                          style={{
+                            width: '40px',
+                            height: '40px',
+                            borderRadius: 'var(--radius-sm)',
+                            background: 'var(--bg-input)',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            fontSize: '1.2rem',
+                          }}
+                        >
+                          👟
+                        </div>
+                      )}
+                      <div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
+                          <span style={{ fontWeight: 800, fontSize: '0.9rem', color: 'var(--text-primary)' }}>
+                            {sug.model.reference_code}
+                          </span>
+                          {sug.model.name && (
+                            <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>
+                              • {sug.model.name}
+                            </span>
+                          )}
+                        </div>
+
+                        {/* Badges: Search Count & Fallback Warning */}
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', flexWrap: 'wrap', marginTop: '2px' }}>
+                          <span
+                            className="badge badge-amber"
+                            style={{ fontSize: '0.65rem', padding: '0.1rem 0.35rem', fontWeight: 700 }}
+                          >
+                            <Flame size={10} />
+                            <span>{t('smart_transfers.searches_30d', { count: sug.searchCount30d })}</span>
+                          </span>
+
+                          {sug.isZoneAFallback && (
+                            <span
+                              className="badge badge-rose"
+                              style={{ fontSize: '0.65rem', padding: '0.1rem 0.35rem', fontWeight: 700 }}
+                            >
+                              {t('smart_transfers.zone_a_fallback_badge')}
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Actions */}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
+                      <button
+                        type="button"
+                        onClick={() => handleApplySuggestion(sug)}
+                        className={isApplied ? 'btn btn-success' : 'btn btn-primary'}
+                        style={{
+                          padding: '0.35rem 0.75rem',
+                          fontSize: '0.75rem',
+                          gap: '0.35rem',
+                          borderRadius: 'var(--radius-full)',
+                        }}
+                      >
+                        {isApplied ? (
+                          <>
+                            <CheckCircle2 size={13} />
+                            <span>{t('smart_transfers.applied')}</span>
+                          </>
+                        ) : (
+                          <>
+                            <ArrowRightLeft size={13} />
+                            <span>{t('smart_transfers.apply')}</span>
+                          </>
+                        )}
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => setDismissedSuggestionIds((prev) => new Set([...prev, sug.id]))}
+                        style={{
+                          background: 'transparent',
+                          border: 'none',
+                          color: 'var(--text-muted)',
+                          cursor: 'pointer',
+                          padding: '4px',
+                          display: 'flex',
+                          alignItems: 'center',
+                          borderRadius: '50%',
+                        }}
+                        title={t('smart_transfers.dismiss')}
+                      >
+                        <X size={14} />
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Route & Section Capacity indicator */}
+                  <div
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                      flexWrap: 'wrap',
+                      background: 'var(--bg-page)',
+                      padding: '0.45rem 0.65rem',
+                      borderRadius: 'var(--radius-sm)',
+                      border: '1px solid var(--border-default)',
+                      fontSize: '0.72rem',
+                      gap: '0.4rem',
+                    }}
+                  >
+                    {/* Transfer Route */}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
+                      <span style={{ color: 'var(--text-muted)' }}>
+                        {sug.currentArea.name} ({sug.currentSection.name})
+                      </span>
+                      <ArrowRight size={12} style={{ color: 'var(--accent)' }} />
+                      <span style={{ fontWeight: 700, color: 'var(--text-primary)' }}>
+                        {sug.targetArea.name} ({sug.targetSection.name})
+                      </span>
+                    </div>
+
+                    {/* Target Capacity Pill */}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.3rem', color: 'var(--text-secondary)' }}>
+                      <Package size={12} style={{ color: 'var(--accent)' }} />
+                      <span style={{ fontWeight: 600 }}>
+                        {t('smart_transfers.target_capacity', {
+                          current: sug.targetSectionOccupancy.current,
+                          capacity: sug.targetSectionOccupancy.capacity,
+                          remaining: sug.targetSectionOccupancy.remaining,
+                        })}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
       {/* Main Transfer Card */}
-      <div className="card" style={{ padding: '1.25rem', marginBottom: '1rem' }}>
+      <div id="transfer-workflow-card" className="card" style={{ padding: '1.25rem', marginBottom: '1rem' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '1.25rem' }}>
           <div
             style={{
