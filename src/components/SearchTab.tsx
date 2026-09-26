@@ -16,6 +16,8 @@ import {
   AlertCircle,
   SlidersHorizontal,
   RotateCcw,
+  Box,
+  Palette,
 } from 'lucide-react';
 import {
   ShoeModel,
@@ -735,12 +737,44 @@ export const SearchTab: React.FC<SearchTabProps> = ({
                         {item.model.price.toFixed(2)} DA
                       </span>
                     )}
+
+                    {item.model.box_color && (
+                      <span
+                        className="badge"
+                        style={{ background: 'rgba(217, 119, 6, 0.1)', color: '#D97706', fontSize: '0.72rem' }}
+                        title={`Couleur de la boîte: ${item.model.box_color}`}
+                      >
+                        <Box size={10} />
+                        <span>{item.model.box_color}</span>
+                      </span>
+                    )}
                   </div>
 
                   {item.model.name && (
-                    <p style={{ fontSize: '0.8125rem', color: 'var(--text-secondary)', marginBottom: '0.5rem' }}>
+                    <p style={{ fontSize: '0.8125rem', color: 'var(--text-secondary)', marginBottom: '0.4rem' }}>
                       {item.model.name}
                     </p>
+                  )}
+
+                  {item.model.available_colors && item.model.available_colors.length > 0 && (
+                    <div style={{ display: 'flex', gap: '0.3rem', flexWrap: 'wrap', marginBottom: '0.45rem', alignItems: 'center' }}>
+                      <Palette size={11} style={{ color: 'var(--text-muted)' }} />
+                      {item.model.available_colors.map((c, i) => (
+                        <span
+                          key={i}
+                          style={{
+                            fontSize: '0.68rem',
+                            background: 'var(--bg-input)',
+                            padding: '1px 5px',
+                            borderRadius: '3px',
+                            color: 'var(--text-secondary)',
+                            border: '1px solid var(--border-default)',
+                          }}
+                        >
+                          {c}
+                        </span>
+                      ))}
+                    </div>
                   )}
 
                   {/* Physical Location Chips */}

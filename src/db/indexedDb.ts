@@ -17,10 +17,12 @@ import {
   AuditAction,
   SyncQueueItem,
   WarehouseMapLayout,
+  InventorySnapshot,
+  InventoryModelSnapshot,
 } from '../types';
 
 const DB_NAME = 'winrah_db';
-const DB_VERSION = 3; // Incremented for warehouse_maps layout store
+const DB_VERSION = 4; // Incremented for inventory_snapshots AI store
 
 export class LocalDatabase {
   private db: IDBDatabase | null = null;
@@ -119,6 +121,14 @@ export class LocalDatabase {
           const s = db.createObjectStore('warehouse_maps', { keyPath: 'id' });
           s.createIndex('warehouse_id', 'warehouse_id', { unique: false });
           s.createIndex('updated_at', 'updated_at', { unique: false });
+        }
+
+        // 13. Inventory_Snapshots (AI-Powered Cycle Counts)
+        if (!db.objectStoreNames.contains('inventory_snapshots')) {
+          const s = db.createObjectStore('inventory_snapshots', { keyPath: 'id' });
+          s.createIndex('section_id', 'section_id', { unique: false });
+          s.createIndex('warehouse_id', 'warehouse_id', { unique: false });
+          s.createIndex('performed_at', 'performed_at', { unique: false });
         }
       };
 
@@ -408,6 +418,7 @@ export class LocalDatabase {
     search_logs: SearchLog[];
     audit_logs: AuditLog[];
     warehouse_maps: WarehouseMapLayout[];
+    inventory_snapshots: InventorySnapshot[];
   }> {
     const warehouses = (await this.getAll<Warehouse>('warehouses')).filter((w) => w.is_dirty);
     const areas = (await this.getAll<Area>('areas')).filter((a) => a.is_dirty);
@@ -426,6 +437,9 @@ export class LocalDatabase {
     const warehouse_maps = (await this.getAll<WarehouseMapLayout>('warehouse_maps')).filter(
       (wm) => wm.is_dirty
     );
+    const inventory_snapshots = (await this.getAll<InventorySnapshot>('inventory_snapshots')).filter(
+      (inv) => inv.is_dirty
+    );
 
     return {
       warehouses,
@@ -437,6 +451,7 @@ export class LocalDatabase {
       search_logs,
       audit_logs,
       warehouse_maps,
+      inventory_snapshots,
     };
   }
 
@@ -923,6 +938,42 @@ export class LocalDatabase {
       await this.delete('search_logs', log.id);
     }
     return toDelete.length;
+  }
+
+  /**
+   * Retrieves the most recent InventorySnapshot for a specific section.
+   */
+  async getLatestSnapshotForSection(sectionId: string): Promise<InventorySnapshot | null> {
+    await this.init();
+    const all = await this.getAll<InventorySnapshot>('inventory_snapshots');
+    const forSection = all.filter((s) => s.section_id === sectionId);
+    if (forSection.length === 0) return null;
+    forSection.sort((a, b) => new Date(b.performed_at).getTime() - new Date(a.performed_at).getTime());
+    return forSection[0];
+  }
+
+  /**
+   * Finds the latest inventory snapshot containing data for a specific model reference code.
+   */
+  async getLatestStockForModel(
+    referenceCode: string,
+    warehouseId?: string
+  ): Promise<{ snapshot: InventorySnapshot; modelData: InventoryModelSnapshot } | null> {
+    await this.init();
+    const cleanRef = referenceCode.trim().toUpperCase();
+    const all = await this.getAll<InventorySnapshot>('inventory_snapshots');
+    const filtered = all.filter((s) => !warehouseId || s.warehouse_id === warehouseId);
+    filtered.sort((a, b) => new Date(b.performed_at).getTime() - new Date(a.performed_at).getTime());
+
+    for (const snap of filtered) {
+      const match = snap.models.find(
+        (m) => (m.reference_code || '').trim().toUpperCase() === cleanRef
+      );
+      if (match) {
+        return { snapshot: snap, modelData: match };
+      }
+    }
+    return null;
   }
 }
 

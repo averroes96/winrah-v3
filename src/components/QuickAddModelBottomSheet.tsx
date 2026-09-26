@@ -61,6 +61,8 @@ export const QuickAddModelBottomSheet: React.FC<QuickAddModelBottomSheetProps> =
   const [sectionId, setSectionId] = useState('');
   const [sizeRange, setSizeRange] = useState('');
   const [price, setPrice] = useState('');
+  const [boxColor, setBoxColor] = useState('');
+  const [availableColorsInput, setAvailableColorsInput] = useState('');
   const [isBatchMode, setIsBatchMode] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [successToast, setSuccessToast] = useState<string | null>(null);
@@ -117,6 +119,10 @@ export const QuickAddModelBottomSheet: React.FC<QuickAddModelBottomSheetProps> =
         name: name.trim() || null,
         size_range: sizeRange.trim() || null,
         price: price ? parseFloat(price) : null,
+        box_color: boxColor.trim() || null,
+        available_colors: availableColorsInput
+          ? availableColorsInput.split(/[,;/]+/).map((c) => c.trim()).filter(Boolean)
+          : null,
         status: 'active',
         created_at: now,
         updated_at: now,
@@ -477,6 +483,37 @@ export const QuickAddModelBottomSheet: React.FC<QuickAddModelBottomSheetProps> =
                 placeholder={t('modal.quick_add.price_placeholder')}
                 value={price}
                 onChange={(e) => setPrice(e.target.value)}
+                style={{ fontSize: '0.82rem', height: '42px' }}
+              />
+            </div>
+          </div>
+
+          {/* 5. Box Color & Available Colors */}
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1.4fr', gap: '0.65rem' }}>
+            <div>
+              <label style={{ display: 'block', fontSize: '0.78rem', fontWeight: 700, color: 'var(--text-primary)', marginBottom: '0.25rem' }}>
+                {language === 'ar' ? 'لون العلبة' : 'Couleur boîte'}
+              </label>
+              <input
+                type="text"
+                className="input-control"
+                placeholder="ex: marron, blanc"
+                value={boxColor}
+                onChange={(e) => setBoxColor(e.target.value)}
+                style={{ fontSize: '0.82rem', height: '42px' }}
+              />
+            </div>
+
+            <div>
+              <label style={{ display: 'block', fontSize: '0.78rem', fontWeight: 700, color: 'var(--text-primary)', marginBottom: '0.25rem' }}>
+                {language === 'ar' ? 'ألوان الموديل' : 'Couleurs disponibles'}
+              </label>
+              <input
+                type="text"
+                className="input-control"
+                placeholder="ex: noir, blanc, gris"
+                value={availableColorsInput}
+                onChange={(e) => setAvailableColorsInput(e.target.value)}
                 style={{ fontSize: '0.82rem', height: '42px' }}
               />
             </div>

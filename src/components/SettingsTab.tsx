@@ -28,6 +28,10 @@ import {
   Database,
   Info,
   Sparkles,
+  Key,
+  Eye,
+  EyeOff,
+  Bot,
 } from 'lucide-react';
 import { syncEngine, SyncEngineStatus } from '../lib/syncEngine';
 import { db } from '../db/indexedDb';
@@ -38,6 +42,13 @@ import { exportCatalogToCsv, downloadBlob } from '../lib/csvHelper';
 import { fetchFirebaseDatabase, isFirebaseConfigured, SyncProgressUpdate } from '../lib/firebaseClient';
 import { fetchServerDatabase } from '../lib/appwriteClient';
 import { initBaseWarehouse } from '../db/seedData';
+import {
+  getGeminiConfig,
+  setGeminiConfig,
+  clearGeminiConfig,
+  testGeminiConnection,
+  DEFAULT_GEMINI_MODEL,
+} from '../lib/geminiClient';
 
 interface SettingsTabProps {
   activeWarehouse: Warehouse | null;
@@ -84,6 +95,21 @@ export const SettingsTab: React.FC<SettingsTabProps> = ({
   const [statusFeedback, setStatusFeedback] = useState<{ success: boolean; text: string } | null>(null);
   const [isAdvancedSyncOpen, setIsAdvancedSyncOpen] = useState(false);
   const [isMaintenanceConfirmOpen, setIsMaintenanceConfirmOpen] = useState(false);
+
+  // Gemini Vision AI settings state
+  const [geminiApiKey, setGeminiApiKey] = useState('');
+  const [geminiModel, setGeminiModel] = useState(DEFAULT_GEMINI_MODEL);
+  const [showApiKey, setShowApiKey] = useState(false);
+  const [isTestingGemini, setIsTestingGemini] = useState(false);
+  const [geminiTestResult, setGeminiTestResult] = useState<{ success: boolean; message: string } | null>(null);
+
+  useEffect(() => {
+    const cfg = getGeminiConfig();
+    if (cfg) {
+      setGeminiApiKey(cfg.apiKey);
+      setGeminiModel(cfg.model);
+    }
+  }, []);
 
   useEffect(() => {
     loadSyncData();
@@ -566,7 +592,198 @@ export const SettingsTab: React.FC<SettingsTabProps> = ({
         </div>
       </div>
 
-      {/* 4. Data Management: Import & Export CSV */}
+      {/* 4. Gemini AI Vision Configuration Card */}
+      <div className="card" style={{ padding: '1.25rem' }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.5rem' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.55rem' }}>
+            <div
+              style={{
+                width: '32px',
+                height: '32px',
+                borderRadius: 'var(--radius-sm)',
+                background: 'linear-gradient(135deg, #8B5CF6 0%, #6366F1 100%)',
+                color: '#fff',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                boxShadow: '0 2px 6px rgba(139, 92, 246, 0.3)',
+              }}
+            >
+              <Bot size={18} />
+            </div>
+            <div>
+              <h3 style={{ fontSize: '0.95rem', fontWeight: 800, margin: 0 }}>
+                {language === 'ar' ? 'الذكاء الاصطناعي (Gemini Vision)' : 'Intelligence Artificielle (Gemini Vision)'}
+              </h3>
+              <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>
+                {language === 'ar'
+                  ? 'التعرف على ملصقات العلب وتعداد المخزون تلقائياً'
+                  : 'Analyse visuelle des étiquettes et inventaire automatique'}
+              </span>
+            </div>
+          </div>
+
+          <span
+            style={{
+              fontSize: '0.68rem',
+              fontWeight: 700,
+              padding: '2px 8px',
+              borderRadius: '999px',
+              background: geminiApiKey.trim() ? 'rgba(16, 185, 129, 0.15)' : 'rgba(239, 68, 68, 0.15)',
+              color: geminiApiKey.trim() ? '#10B981' : 'var(--danger)',
+            }}
+          >
+            {geminiApiKey.trim() ? (language === 'ar' ? 'مفعل' : 'Actif') : (language === 'ar' ? 'غير مهيأ' : 'Non configuré')}
+          </span>
+        </div>
+
+        <p style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', marginBottom: '0.85rem', lineHeight: 1.45 }}>
+          {language === 'ar'
+            ? 'يقوم النموذج بفحص صور الرفوف وتحديد ملصقات العلب (REF | COLOR | SIZE) لحساب الأزواج المتوفرة وإدخال الموديلات.'
+            : 'Gemini Vision analyse les photos des étagères et détecte les étiquettes des boîtes (REF | COLOR | SIZE) pour dénombrer le stock.'}
+        </p>
+
+        {/* API Key Input */}
+        <div style={{ marginBottom: '0.75rem' }}>
+          <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, marginBottom: '0.3rem', color: 'var(--text-primary)' }}>
+            {language === 'ar' ? 'مفتاح Gemini API (Google AI Studio)' : 'Clé API Google Gemini'}
+          </label>
+          <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
+            <input
+              type={showApiKey ? 'text' : 'password'}
+              value={geminiApiKey}
+              onChange={(e) => {
+                setGeminiApiKey(e.target.value);
+                setGeminiTestResult(null);
+              }}
+              placeholder="AIzaSy..."
+              style={{
+                width: '100%',
+                padding: '0.55rem 2.4rem 0.55rem 0.75rem',
+                fontSize: '0.82rem',
+                fontFamily: 'monospace',
+                background: 'var(--bg-input)',
+                border: '1px solid var(--border-default)',
+                borderRadius: 'var(--radius-sm)',
+                color: 'var(--text-primary)',
+              }}
+            />
+            <button
+              type="button"
+              onClick={() => setShowApiKey(!showApiKey)}
+              style={{
+                position: 'absolute',
+                right: '0.6rem',
+                background: 'transparent',
+                border: 'none',
+                color: 'var(--text-muted)',
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                padding: '2px',
+              }}
+            >
+              {showApiKey ? <EyeOff size={16} /> : <Eye size={16} />}
+            </button>
+          </div>
+        </div>
+
+        {/* Model Selection */}
+        <div style={{ marginBottom: '0.85rem' }}>
+          <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, marginBottom: '0.3rem', color: 'var(--text-primary)' }}>
+            {language === 'ar' ? 'النموذج المستخدم' : 'Modèle de vision'}
+          </label>
+          <select
+            value={geminiModel}
+            onChange={(e) => {
+              setGeminiModel(e.target.value);
+              setGeminiTestResult(null);
+            }}
+            style={{
+              width: '100%',
+              padding: '0.55rem 0.75rem',
+              fontSize: '0.82rem',
+              background: 'var(--bg-input)',
+              border: '1px solid var(--border-default)',
+              borderRadius: 'var(--radius-sm)',
+              color: 'var(--text-primary)',
+            }}
+          >
+            <option value="gemini-2.5-flash">Gemini 2.5 Flash (Recommandé - Rapide & Haute Précision OCR)</option>
+            <option value="gemini-2.0-flash">Gemini 2.0 Flash</option>
+          </select>
+        </div>
+
+        {/* Feedback Alert */}
+        {geminiTestResult && (
+          <div
+            style={{
+              padding: '0.65rem 0.85rem',
+              borderRadius: 'var(--radius-sm)',
+              background: geminiTestResult.success ? 'rgba(16, 185, 129, 0.12)' : 'rgba(239, 68, 68, 0.12)',
+              color: geminiTestResult.success ? '#059669' : '#b91c1c',
+              border: `1px solid ${geminiTestResult.success ? 'rgba(16, 185, 129, 0.3)' : 'rgba(239, 68, 68, 0.3)'}`,
+              fontSize: '0.78rem',
+              fontWeight: 600,
+              marginBottom: '0.75rem',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '0.45rem',
+            }}
+          >
+            {geminiTestResult.success ? <CheckCircle2 size={15} /> : <AlertTriangle size={15} />}
+            <span>{geminiTestResult.message}</span>
+          </div>
+        )}
+
+        {/* Buttons */}
+        <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
+          <button
+            type="button"
+            onClick={async () => {
+              if (!geminiApiKey.trim()) {
+                clearGeminiConfig();
+                setGeminiTestResult({ success: true, message: 'Clé API supprimée.' });
+                return;
+              }
+              setIsTestingGemini(true);
+              setGeminiTestResult(null);
+              try {
+                const res = await testGeminiConnection(geminiApiKey, geminiModel);
+                setGeminiTestResult(res);
+                if (res.success) {
+                  setGeminiConfig(geminiApiKey.trim(), geminiModel);
+                }
+              } finally {
+                setIsTestingGemini(false);
+              }
+            }}
+            disabled={isTestingGemini || !geminiApiKey.trim()}
+            className="btn btn-primary"
+            style={{
+              fontSize: '0.8rem',
+              padding: '0.55rem 0.85rem',
+              gap: '0.4rem',
+              background: 'linear-gradient(135deg, #8B5CF6 0%, #6366F1 100%)',
+            }}
+          >
+            <Sparkles size={14} className={isTestingGemini ? 'animate-spin' : ''} />
+            <span>{isTestingGemini ? (language === 'ar' ? 'جاري الاختبار...' : 'Test en cours...') : (language === 'ar' ? 'حفظ واختبار الاتصال' : 'Sauvegarder & Tester')}</span>
+          </button>
+
+          <a
+            href="https://aistudio.google.com/app/apikey"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="btn btn-secondary"
+            style={{ fontSize: '0.78rem', padding: '0.55rem 0.75rem', textDecoration: 'none' }}
+          >
+            {language === 'ar' ? 'الحصول على مفتاح مجاني' : 'Obtenir clé gratuite (Google AI)'}
+          </a>
+        </div>
+      </div>
+
+      {/* 5. Data Management: Import & Export CSV */}
       <div className="card" style={{ padding: '1.25rem' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.4rem' }}>
           <FileSpreadsheet size={18} style={{ color: 'var(--accent)' }} />

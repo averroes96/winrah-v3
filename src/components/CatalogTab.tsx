@@ -20,7 +20,8 @@ import {
   ChevronRight,
   AlertTriangle,
   Loader2,
-  Upload,
+  Sparkles,
+  ClipboardList,
 } from 'lucide-react';
 import {
   Warehouse,
@@ -28,11 +29,14 @@ import {
   Section,
   ShoeModel,
   ModelSection,
+  InventorySnapshot,
 } from '../types';
 import { db } from '../db/indexedDb';
 import { SectionSearchSelect } from './SectionSearchSelect';
 import { WarehouseMapView } from './WarehouseMapView';
 import { TransferModal } from './TransferModal';
+import { AiScannerModal } from './AiScannerModal';
+import { AiCycleCountModal } from './AiCycleCountModal';
 import { useI18n } from '../i18n';
 
 
@@ -46,7 +50,7 @@ interface CatalogTabProps {
   onRefreshData: () => void;
   onOpenQuickAdd?: () => void;
   onNavigateToSearch?: (query?: string) => void;
-  onOpenImportModal?: () => void;
+  onOpenSettings?: () => void;
 }
 
 export const CatalogTab: React.FC<CatalogTabProps> = ({
@@ -59,12 +63,44 @@ export const CatalogTab: React.FC<CatalogTabProps> = ({
   onRefreshData,
   onOpenQuickAdd,
   onNavigateToSearch,
-  onOpenImportModal,
+  onOpenSettings,
 }) => {
-  const { direction, t } = useI18n();
+  const { direction, language, t } = useI18n();
   const [activeSubTab, setActiveSubTab] = useState<'structure' | 'map' | 'models'>('structure');
   const [modelToTransfer, setModelToTransfer] = useState<ShoeModel | null>(null);
   const [transferFromSectionId, setTransferFromSectionId] = useState<string | undefined>(undefined);
+
+  // AI Modal States
+  const [selectedSectionForAi, setSelectedSectionForAi] = useState<Section | null>(null);
+  const [selectedAreaForAi, setSelectedAreaForAi] = useState<Area | null>(null);
+  const [isAiScannerOpen, setIsAiScannerOpen] = useState(false);
+  const [isAiCycleCountOpen, setIsAiCycleCountOpen] = useState(false);
+  const [sectionSnapshotsMap, setSectionSnapshotsMap] = useState<Map<string, InventorySnapshot>>(new Map());
+
+  // Load latest cycle count snapshots for sections
+  React.useEffect(() => {
+    let isMounted = true;
+    const loadSnapshots = async () => {
+      try {
+        const allSnapshots = await db.getAll<InventorySnapshot>('inventory_snapshots');
+        if (!isMounted) return;
+        const map = new Map<string, InventorySnapshot>();
+        allSnapshots.sort((a, b) => new Date(b.performed_at).getTime() - new Date(a.performed_at).getTime());
+        for (const s of allSnapshots) {
+          if (!map.has(s.section_id)) {
+            map.set(s.section_id, s);
+          }
+        }
+        setSectionSnapshotsMap(map);
+      } catch (err) {
+        console.error('Error loading inventory snapshots:', err);
+      }
+    };
+    loadSnapshots();
+    return () => {
+      isMounted = false;
+    };
+  }, [sections]);
 
   // Structure view state (FR-2, FR-3, Uncluttered Accordion & Cascade Deletions)
   const [expandedAreaIds, setExpandedAreaIds] = useState<Set<string>>(new Set());
@@ -502,19 +538,6 @@ export const CatalogTab: React.FC<CatalogTabProps> = ({
                   <Plus size={13} />
                   <span>{t('catalog.structure.add_section')}</span>
                 </button>
-
-                {onOpenImportModal && (
-                  <button
-                    type="button"
-                    onClick={onOpenImportModal}
-                    className="btn btn-secondary"
-                    style={{ padding: '0.35rem 0.65rem', fontSize: '0.78rem', gap: '0.3rem' }}
-                    title="Importer la base de données WINRAH v2 d'origine ou un fichier CSV"
-                  >
-                    <Upload size={13} style={{ color: 'var(--accent)' }} />
-                    <span>Import v2 / CSV</span>
-                  </button>
-                )}
               </div>
             </div>
 
@@ -833,11 +856,89 @@ export const CatalogTab: React.FC<CatalogTabProps> = ({
                                     >
                                       {count} modèle{count > 1 ? 's' : ''}
                                     </span>
+
+                                    {sectionSnapshotsMap.has(sec.id) && (
+                                      <span
+                                        style={{
+                                          fontSize: '0.68rem',
+                                          color: '#059669',
+                                          background: 'rgba(16, 185, 129, 0.1)',
+                                          padding: '0.1rem 0.35rem',
+                                          borderRadius: 'var(--radius-sm)',
+                                          fontWeight: 600,
+                                        }}
+                                        title={`Dernier inventaire: ${sectionSnapshotsMap.get(sec.id)?.total_pairs} paires`}
+                                      >
+                                        📊 {sectionSnapshotsMap.get(sec.id)?.total_pairs} p.
+                                      </span>
+                                    )}
+
                                     {sec.capacity && (
                                       <span style={{ fontSize: '0.68rem', color: 'var(--text-muted)' }} title={`Capacité: ${sec.capacity}`}>
                                         {sec.capacity}
                                       </span>
                                     )}
+                                  </div>
+
+                                  {/* AI Action Buttons */}
+                                  <div
+                                    style={{
+                                      display: 'flex',
+                                      gap: '0.3rem',
+                                      marginTop: '0.35rem',
+                                      borderTop: '1px solid var(--border-default)',
+                                      paddingTop: '0.35rem',
+                                    }}
+                                  >
+                                    <button
+                                      type="button"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        setSelectedSectionForAi(sec);
+                                        setSelectedAreaForAi(area);
+                                        setIsAiScannerOpen(true);
+                                      }}
+                                      className="btn btn-secondary"
+                                      style={{
+                                        flex: 1,
+                                        padding: '0.22rem 0.35rem',
+                                        fontSize: '0.68rem',
+                                        gap: '0.25rem',
+                                        justifyContent: 'center',
+                                        background: 'rgba(139, 92, 246, 0.08)',
+                                        color: '#7C3AED',
+                                        borderColor: 'rgba(139, 92, 246, 0.25)',
+                                      }}
+                                      title={language === 'ar' ? 'مسح الموديلات بالكاميرا' : 'Scanner les modèles par IA'}
+                                    >
+                                      <Sparkles size={11} />
+                                      <span>{language === 'ar' ? 'مسح IA' : 'Scan IA'}</span>
+                                    </button>
+
+                                    <button
+                                      type="button"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        setSelectedSectionForAi(sec);
+                                        setSelectedAreaForAi(area);
+                                        setIsAiCycleCountOpen(true);
+                                      }}
+                                      className="btn btn-secondary"
+                                      style={{
+                                        flex: 1,
+                                        padding: '0.22rem 0.35rem',
+                                        fontSize: '0.68rem',
+                                        gap: '0.25rem',
+                                        justifyContent: 'center',
+                                        background: 'rgba(16, 185, 129, 0.08)',
+                                        color: '#059669',
+                                        borderColor: 'rgba(16, 185, 129, 0.25)',
+                                      }}
+                                      title={language === 'ar' ? 'جرد كميات الرف' : 'Comptage physique des paires'}
+                                    >
+                                      <ClipboardList size={11} />
+                                      <span>{language === 'ar' ? 'جرد IA' : 'Compter'}</span>
+                                    </button>
                                   </div>
                                 </div>
                               );
@@ -893,18 +994,6 @@ export const CatalogTab: React.FC<CatalogTabProps> = ({
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.85rem' }}>
             <h3 style={{ fontSize: '1.05rem', fontWeight: 800 }}>{t('models.title', { count: models.length })}</h3>
             <div style={{ display: 'flex', gap: '0.4rem', alignItems: 'center' }}>
-              {onOpenImportModal && (
-                <button
-                  type="button"
-                  onClick={onOpenImportModal}
-                  className="btn btn-secondary"
-                  style={{ padding: '0.45rem 0.75rem', fontSize: '0.8rem', gap: '0.35rem' }}
-                  title="Importer la base WINRAH v2 d'origine ou un fichier CSV"
-                >
-                  <Upload size={14} style={{ color: 'var(--accent)' }} />
-                  <span>Import v2 / CSV</span>
-                </button>
-              )}
               <button
                 type="button"
                 onClick={() => (onOpenQuickAdd ? onOpenQuickAdd() : setIsAddModelOpen(true))}
@@ -1556,6 +1645,51 @@ export const CatalogTab: React.FC<CatalogTabProps> = ({
           }}
         />
       )}
+
+      {/* AI Section Scanner Modal (Feature 1) */}
+      <AiScannerModal
+        isOpen={isAiScannerOpen}
+        onClose={() => {
+          setIsAiScannerOpen(false);
+          setSelectedSectionForAi(null);
+          setSelectedAreaForAi(null);
+        }}
+        section={selectedSectionForAi}
+        area={selectedAreaForAi}
+        activeWarehouse={activeWarehouse}
+        existingModels={models}
+        existingModelSections={modelSections}
+        onSuccess={() => {
+          onRefreshData();
+        }}
+        onOpenSettings={onOpenSettings}
+      />
+
+      {/* AI Cycle Count Modal (Feature 2) */}
+      <AiCycleCountModal
+        isOpen={isAiCycleCountOpen}
+        onClose={() => {
+          setIsAiCycleCountOpen(false);
+          setSelectedSectionForAi(null);
+          setSelectedAreaForAi(null);
+        }}
+        section={selectedSectionForAi}
+        area={selectedAreaForAi}
+        activeWarehouse={activeWarehouse}
+        modelsInSection={
+          selectedSectionForAi
+            ? models.filter((m) =>
+                modelSections.some(
+                  (ms) => ms.model_id === m.id && ms.section_id === selectedSectionForAi.id
+                )
+              )
+            : []
+        }
+        onSuccess={() => {
+          onRefreshData();
+        }}
+        onOpenSettings={onOpenSettings}
+      />
     </div>
   );
 };

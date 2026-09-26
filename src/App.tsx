@@ -322,7 +322,7 @@ export function App() {
               setActiveTab('search');
               if (q) setSearchQuery(q);
             }}
-            onOpenImportModal={() => setIsCsvImportModalOpen(true)}
+            onOpenSettings={() => setActiveTab('settings')}
           />
         )}
 

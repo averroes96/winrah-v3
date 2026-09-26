@@ -12,8 +12,20 @@ import {
   Barcode,
   Layers,
   Calendar,
+  Box,
+  Palette,
+  ClipboardList,
+  Sparkles,
 } from 'lucide-react';
-import { DisambiguatedModelResult, TransferLog, Section, ShoeModel } from '../types';
+import {
+  DisambiguatedModelResult,
+  TransferLog,
+  Section,
+  ShoeModel,
+  InventorySnapshot,
+  InventoryModelSnapshot,
+} from '../types';
+import { db } from '../db/indexedDb';
 import { getModelDisplayReference } from '../lib/disambiguation';
 import { useI18n } from '../i18n';
 
@@ -32,7 +44,25 @@ export const ModelDetailModal: React.FC<ModelDetailModalProps> = ({
   onInitiateTransfer,
   onClose,
 }) => {
-  const { direction, t } = useI18n();
+  const { direction, language, t } = useI18n();
+
+  const [stockInfo, setStockInfo] = React.useState<{
+    snapshot: InventorySnapshot;
+    modelData: InventoryModelSnapshot;
+  } | null>(null);
+
+  React.useEffect(() => {
+    let isMounted = true;
+    if (item?.model.reference_code) {
+      db.getLatestStockForModel(item.model.reference_code, item.model.warehouse_id).then((res) => {
+        if (isMounted) setStockInfo(res);
+      });
+    }
+    return () => {
+      isMounted = false;
+    };
+  }, [item?.model.reference_code, item?.model.warehouse_id]);
+
   if (!item) return null;
 
   const sectionMap = new Map(sections.map((s) => [s.id, s]));
@@ -139,9 +169,123 @@ export const ModelDetailModal: React.FC<ModelDetailModalProps> = ({
               {item.model.price && (
                 <span className="badge badge-emerald">{item.model.price.toFixed(2)} DA</span>
               )}
+              {item.model.box_color && (
+                <span
+                  className="badge"
+                  style={{ background: 'rgba(217, 119, 6, 0.1)', color: '#D97706', fontSize: '0.72rem' }}
+                >
+                  <Box size={11} />
+                  <span>Boîte : {item.model.box_color}</span>
+                </span>
+              )}
             </div>
+
+            {item.model.available_colors && item.model.available_colors.length > 0 && (
+              <div style={{ display: 'flex', gap: '0.35rem', flexWrap: 'wrap', marginTop: '0.4rem', alignItems: 'center' }}>
+                <Palette size={13} style={{ color: 'var(--text-muted)' }} />
+                {item.model.available_colors.map((c, i) => (
+                  <span
+                    key={i}
+                    style={{
+                      fontSize: '0.7rem',
+                      background: 'var(--bg-input)',
+                      padding: '1px 6px',
+                      borderRadius: '4px',
+                      color: 'var(--text-secondary)',
+                      border: '1px solid var(--border-default)',
+                    }}
+                  >
+                    {c}
+                  </span>
+                ))}
+              </div>
+            )}
           </div>
         </div>
+
+        {/* AI Cycle Count Stock Availability (FR - Cycle Count Query) */}
+        {stockInfo && (
+          <div
+            style={{
+              padding: '0.85rem 1rem',
+              background: 'linear-gradient(135deg, rgba(16, 185, 129, 0.08) 0%, rgba(5, 150, 105, 0.12) 100%)',
+              border: '1px solid rgba(16, 185, 129, 0.3)',
+              borderRadius: 'var(--radius-md)',
+              marginBottom: '1.25rem',
+            }}
+          >
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.4rem' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.45rem', fontWeight: 800, fontSize: '0.85rem', color: '#059669' }}>
+                <ClipboardList size={15} />
+                <span>{language === 'ar' ? 'المخزون الفعلي (آخر جرد بالذكاء الاصطناعي)' : 'Dernier Inventaire Physique (Comptage IA)'}</span>
+              </div>
+              <span
+                style={{
+                  fontSize: '0.75rem',
+                  fontWeight: 800,
+                  background: '#10B981',
+                  color: '#fff',
+                  padding: '2px 8px',
+                  borderRadius: '12px',
+                }}
+              >
+                {stockInfo.modelData.total_pairs} {language === 'ar' ? 'زوج' : 'paires'}
+              </span>
+            </div>
+
+            <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)', marginBottom: '0.5rem' }}>
+              {language === 'ar' ? 'تاريخ الجرد:' : 'Relevé le :'} {new Date(stockInfo.snapshot.performed_at).toLocaleDateString(undefined, {
+                day: '2-digit',
+                month: 'short',
+                hour: '2-digit',
+                minute: '2-digit',
+              })}
+              {sectionMap.get(stockInfo.snapshot.section_id) && ` • Rayon ${sectionMap.get(stockInfo.snapshot.section_id)?.name}`}
+            </div>
+
+            {/* Size x Color Breakdown */}
+            {stockInfo.modelData.details && stockInfo.modelData.details.length > 0 ? (
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.4rem' }}>
+                {stockInfo.modelData.details.map((d, dIdx) => (
+                  <div
+                    key={dIdx}
+                    style={{
+                      background: '#FFFFFF',
+                      border: '1px solid rgba(16, 185, 129, 0.3)',
+                      borderRadius: 'var(--radius-sm)',
+                      padding: '0.25rem 0.5rem',
+                      fontSize: '0.75rem',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '0.35rem',
+                      boxShadow: '0 1px 2px rgba(0,0,0,0.02)',
+                    }}
+                  >
+                    <span style={{ fontWeight: 800, color: 'var(--text-primary)' }}>{d.size}</span>
+                    <span style={{ color: 'var(--text-muted)' }}>•</span>
+                    <span style={{ color: 'var(--text-secondary)' }}>{d.color}</span>
+                    <span
+                      style={{
+                        marginLeft: '0.2rem',
+                        fontWeight: 800,
+                        color: '#059669',
+                        background: 'rgba(16, 185, 129, 0.15)',
+                        padding: '1px 5px',
+                        borderRadius: '4px',
+                      }}
+                    >
+                      {d.quantity}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>
+                {stockInfo.modelData.total_pairs} {language === 'ar' ? 'زوج مسجل' : 'paires comptées'}
+              </div>
+            )}
+          </div>
+        )}
 
         {/* Disambiguation Insight (FR-4.8) */}
         {item.totalEntriesWithCode > 1 && (

@@ -72,6 +72,8 @@ export interface ShoeModel extends LocalMeta {
   size_range?: string | null;
   price?: number | null;
   photo_url?: string | null;
+  box_color?: string | null;
+  available_colors?: string[] | null;
   status: EntityStatus;
   created_at: string;
   updated_at: string;
@@ -202,6 +204,36 @@ export interface WarehouseMapLayout extends LocalMeta {
   version: number;
 }
 
+// 13. Inventory_Snapshot (AI-Powered Section Cycle Count)
+export interface InventoryPairDetail {
+  size: string;         // e.g. "39", "40"
+  color: string;        // e.g. "noir", "blanc"
+  quantity: number;     // number of pairs observed
+}
+
+export interface InventoryModelSnapshot {
+  reference_code: string;
+  model_id?: string | null;
+  total_pairs: number;
+  details: InventoryPairDetail[];
+}
+
+export interface InventorySnapshot extends LocalMeta {
+  id: string;                 // `inv-${section_id}-${timestamp}`
+  section_id: string;
+  warehouse_id: string;
+  performed_at: string;       // ISO timestamp
+  models: InventoryModelSnapshot[];
+  total_models: number;
+  total_pairs: number;
+  photo_count: number;
+  status: 'completed' | 'partial';
+  notes?: string | null;
+  created_at: string;
+  updated_at: string;
+  version: number;
+}
+
 // Changeset for Device-to-Device or Push
 export interface DeviceChangeset {
   from_device_id: string;
@@ -216,5 +248,6 @@ export interface DeviceChangeset {
     search_logs: SearchLog[];
     audit_logs: AuditLog[];
     warehouse_maps?: WarehouseMapLayout[];
+    inventory_snapshots?: InventorySnapshot[];
   };
 }
