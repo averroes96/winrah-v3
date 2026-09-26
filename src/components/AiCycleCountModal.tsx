@@ -6,6 +6,7 @@
 // ============================================================================
 
 import React, { useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import {
   X,
   ClipboardList,
@@ -185,50 +186,63 @@ export const AiCycleCountModal: React.FC<AiCycleCountModalProps> = ({
 
   const totalPairsOverall = countedModels.reduce((acc, m) => acc + (m.total_pairs || 0), 0);
 
-  return (
+  return createPortal(
     <div
       style={{
         position: 'fixed',
-        top: 0,
-        left: 0,
-        right: 0,
-        bottom: 0,
-        backgroundColor: 'rgba(0,0,0,0.75)',
+        inset: 0,
+        backgroundColor: 'rgba(15, 23, 42, 0.55)',
         backdropFilter: 'blur(4px)',
+        WebkitBackdropFilter: 'blur(4px)',
         zIndex: 1000,
         display: 'flex',
-        alignItems: 'flex-end',
-        justifyContent: 'center',
+        flexDirection: 'column',
+        justifyContent: 'flex-end',
       }}
       onClick={onClose}
     >
       <div
-        className="fade-in"
+        className="card"
+        dir={direction}
+        onClick={(e) => e.stopPropagation()}
         style={{
           width: '100%',
-          maxWidth: '620px',
+          maxWidth: '580px',
+          margin: '0 auto',
+          background: '#FFFFFF',
+          borderRadius: '24px 24px 0 0',
+          boxShadow: '0 -10px 40px rgba(0, 0, 0, 0.2)',
+          border: '1px solid var(--border-default)',
+          borderBottom: 'none',
           maxHeight: '92vh',
-          backgroundColor: 'var(--bg-secondary)',
-          borderTopLeftRadius: '1.25rem',
-          borderTopRightRadius: '1.25rem',
           display: 'flex',
           flexDirection: 'column',
-          border: '1px solid var(--border-color)',
-          boxShadow: '0 -8px 32px rgba(0,0,0,0.5)',
-          direction,
+          animation: 'slideUp 0.25s cubic-bezier(0.16, 1, 0.3, 1) forwards',
+          padding: 0,
           overflow: 'hidden',
         }}
-        onClick={(e) => e.stopPropagation()}
       >
+        {/* Drag Pill Handle */}
+        <div
+          style={{
+            width: '40px',
+            height: '4px',
+            borderRadius: '2px',
+            background: 'var(--border-default)',
+            margin: '10px auto 4px auto',
+            flexShrink: 0,
+          }}
+        />
+
         {/* Header */}
         <div
           style={{
-            padding: '1rem 1.25rem',
-            borderBottom: '1px solid var(--border-color)',
+            padding: '0.85rem 1.25rem',
+            borderBottom: '1px solid var(--border-default)',
             display: 'flex',
             justifyContent: 'space-between',
             alignItems: 'center',
-            background: 'var(--surface-color)',
+            background: '#FFFFFF',
           }}
         >
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem' }}>
@@ -248,7 +262,7 @@ export const AiCycleCountModal: React.FC<AiCycleCountModalProps> = ({
               <ClipboardList size={20} />
             </div>
             <div>
-              <h2 style={{ fontSize: '1.05rem', fontWeight: 800, margin: 0 }}>
+              <h2 style={{ fontSize: '1.05rem', fontWeight: 800, margin: 0, color: 'var(--text-primary)' }}>
                 {language === 'ar' ? 'جرد كميات الرف (Cycle Count)' : 'Inventaire Cycle Count IA'}
               </h2>
               <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
@@ -261,19 +275,23 @@ export const AiCycleCountModal: React.FC<AiCycleCountModalProps> = ({
             type="button"
             onClick={onClose}
             style={{
-              background: 'transparent',
+              background: '#F1F5F9',
               border: 'none',
-              color: 'var(--text-muted)',
+              borderRadius: '50%',
+              color: 'var(--text-secondary)',
               cursor: 'pointer',
-              padding: '0.3rem',
+              padding: '0.4rem',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
             }}
           >
-            <X size={20} />
+            <X size={18} />
           </button>
         </div>
 
         {/* Body */}
-        <div style={{ padding: '1.1rem 1.25rem', overflowY: 'auto', flex: 1 }}>
+        <div style={{ padding: '1.1rem 1.25rem', overflowY: 'auto', flex: 1, color: 'var(--text-primary)' }}>
           {/* Missing API Key Warning */}
           {!hasApiKey && (
             <div
@@ -591,11 +609,11 @@ export const AiCycleCountModal: React.FC<AiCycleCountModalProps> = ({
           <div
             style={{
               padding: '0.9rem 1.25rem',
-              borderTop: '1px solid var(--border-color)',
+              borderTop: '1px solid var(--border-default)',
               display: 'flex',
               justifyContent: 'space-between',
               alignItems: 'center',
-              background: 'var(--surface-color)',
+              background: '#FFFFFF',
             }}
           >
             <button
@@ -650,6 +668,7 @@ export const AiCycleCountModal: React.FC<AiCycleCountModalProps> = ({
           </div>
         )}
       </div>
-    </div>
+    </div>,
+    document.body
   );
 };

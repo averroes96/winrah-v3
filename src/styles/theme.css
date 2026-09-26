@@ -26,6 +26,10 @@
   /* Compatibility aliases */
   --primary: #F59E0B;
   --primary-text: #FFFFFF;
+  --bg-primary: #FFFFFF;
+  --bg-secondary: #F8F9FB;
+  --surface-color: #FFFFFF;
+  --border-color: #E2E8F0;
 
   /* Text */
   --text-primary: #1E293B;

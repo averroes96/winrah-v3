@@ -4,6 +4,7 @@
 // ============================================================================
 
 import React, { useState } from 'react';
+import { createPortal } from 'react-dom';
 import { ArrowRightLeft, X, MapPin } from 'lucide-react';
 import { ShoeModel, Section, Area, Warehouse, TransferLog } from '../types';
 import { db } from '../db/indexedDb';
@@ -105,7 +106,7 @@ export const TransferModal: React.FC<TransferModalProps> = ({
     onClose();
   };
 
-  return (
+  return createPortal(
     <div
       style={{
         position: 'fixed',
@@ -245,6 +246,7 @@ export const TransferModal: React.FC<TransferModalProps> = ({
           </div>
         </form>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 };

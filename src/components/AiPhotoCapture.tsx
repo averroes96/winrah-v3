@@ -38,6 +38,19 @@ export const AiPhotoCapture: React.FC<AiPhotoCaptureProps> = ({
 
   const isMaxReached = photos.length >= maxPhotos;
 
+  const previewUrls = React.useMemo(() => {
+    return photos.map((file) => ({
+      file,
+      url: URL.createObjectURL(file),
+    }));
+  }, [photos]);
+
+  React.useEffect(() => {
+    return () => {
+      previewUrls.forEach((item) => URL.revokeObjectURL(item.url));
+    };
+  }, [previewUrls]);
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
       {/* Hidden file inputs */}
@@ -140,29 +153,27 @@ export const AiPhotoCapture: React.FC<AiPhotoCaptureProps> = ({
             border: '1px solid var(--border-color)',
           }}
         >
-          {photos.map((file, index) => {
-            const previewUrl = URL.createObjectURL(file);
+          {previewUrls.map((item, index) => {
             return (
               <div
-                key={`${file.name}-${index}`}
+                key={`${item.file.name}-${index}`}
                 style={{
                   position: 'relative',
                   aspectRatio: '1',
                   borderRadius: 'var(--radius-sm)',
                   overflow: 'hidden',
-                  border: '1px solid var(--border-color)',
+                  border: '1px solid var(--border-default)',
                   background: '#000',
                 }}
               >
                 <img
-                  src={previewUrl}
+                  src={item.url}
                   alt={`Photo ${index + 1}`}
                   style={{
                     width: '100%',
                     height: '100%',
                     objectFit: 'cover',
                   }}
-                  onLoad={() => URL.revokeObjectURL(previewUrl)}
                 />
 
                 {/* Index badge */}
