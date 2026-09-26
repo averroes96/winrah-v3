@@ -79,6 +79,8 @@ export const SearchTab: React.FC<SearchTabProps> = ({
     sortBy: 'relevance',
   });
   const [isFilterModalOpen, setIsFilterModalOpen] = useState(false);
+  const [isSearchFocused, setIsSearchFocused] = useState(false);
+  const searchInputRef = useRef<HTMLInputElement>(null);
 
   const lastLoggedQueryRef = useRef<string>('');
   const searchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -251,26 +253,42 @@ export const SearchTab: React.FC<SearchTabProps> = ({
 
   return (
     <div className="fade-in">
-      {/* Sleek Search Row: Input + Barcode Scanner + Filter Button */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: '0.45rem', marginBottom: '0.75rem' }}>
+      {/* Prominent Search Row: Widen Input + Barcode Scanner + Filter Button */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', marginBottom: '1rem' }}>
         <div
+          onClick={() => searchInputRef.current?.focus()}
           style={{
             flex: 1,
             display: 'flex',
             alignItems: 'center',
-            gap: '0.5rem',
-            background: 'var(--bg-input)',
-            border: '1px solid var(--border-default)',
+            gap: '0.75rem',
+            background: '#FFFFFF',
+            border: isSearchFocused ? '2px solid var(--accent)' : '1.5px solid var(--border-default)',
             borderRadius: 'var(--radius-md)',
-            padding: '0.5rem 0.75rem',
-            transition: 'all 0.15s ease',
+            padding: '0 1rem',
+            minHeight: '52px',
+            cursor: 'text',
+            boxShadow: isSearchFocused
+              ? '0 0 0 3px rgba(245, 158, 11, 0.18), 0 4px 12px rgba(0, 0, 0, 0.08)'
+              : '0 2px 8px rgba(0, 0, 0, 0.05)',
+            transition: 'border-color 0.15s ease, box-shadow 0.15s ease',
           }}
         >
-          <Search size={18} style={{ color: 'var(--text-muted)', flexShrink: 0 }} />
+          <Search
+            size={22}
+            style={{
+              color: isSearchFocused ? 'var(--accent)' : 'var(--text-muted)',
+              flexShrink: 0,
+              transition: 'color 0.15s ease',
+            }}
+          />
 
           <input
+            ref={searchInputRef}
             type="text"
             value={query}
+            onFocus={() => setIsSearchFocused(true)}
+            onBlur={() => setIsSearchFocused(false)}
             onChange={(e) => setQuery(e.target.value)}
             onKeyDown={(e) => {
               if (e.key === 'Enter') {
@@ -285,29 +303,39 @@ export const SearchTab: React.FC<SearchTabProps> = ({
               border: 'none',
               outline: 'none',
               color: 'var(--text-primary)',
-              fontSize: '0.9375rem',
+              fontSize: '1.05rem',
+              fontWeight: 600,
+              letterSpacing: '0.3px',
               fontFamily: 'inherit',
+              padding: '0.75rem 0',
+              height: '50px',
             }}
           />
 
           {query && (
             <button
               type="button"
-              onClick={() => {
+              onClick={(e) => {
+                e.stopPropagation();
                 if (searchTimerRef.current) {
                   clearTimeout(searchTimerRef.current);
                   searchTimerRef.current = null;
                 }
                 setQuery('');
+                searchInputRef.current?.focus();
               }}
               style={{
-                background: 'transparent',
+                background: '#F1F5F9',
                 border: 'none',
-                color: 'var(--text-muted)',
+                borderRadius: '50%',
+                color: 'var(--text-secondary)',
                 cursor: 'pointer',
-                padding: '4px',
+                width: '28px',
+                height: '28px',
                 display: 'flex',
                 alignItems: 'center',
+                justifyContent: 'center',
+                flexShrink: 0,
               }}
             >
               <X size={16} />
@@ -323,20 +351,20 @@ export const SearchTab: React.FC<SearchTabProps> = ({
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
-            width: '42px',
-            height: '42px',
+            width: '52px',
+            height: '52px',
             borderRadius: 'var(--radius-md)',
-            background: 'var(--accent)',
+            background: 'linear-gradient(135deg, #F59E0B 0%, #D97706 100%)',
             color: '#FFFFFF',
             border: 'none',
             cursor: 'pointer',
             flexShrink: 0,
-            boxShadow: '0 2px 8px rgba(245, 158, 11, 0.25)',
+            boxShadow: '0 4px 12px rgba(217, 119, 6, 0.35)',
             transition: 'transform 0.1s ease',
           }}
           title={t('search.scan_tooltip')}
         >
-          <ScanBarcode size={20} />
+          <ScanBarcode size={22} />
         </button>
 
         {/* Advanced Filter Button with Active Badge */}
@@ -347,36 +375,38 @@ export const SearchTab: React.FC<SearchTabProps> = ({
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
-            width: '42px',
-            height: '42px',
+            width: '52px',
+            height: '52px',
             borderRadius: 'var(--radius-md)',
-            background: activeFiltersCount > 0 ? 'var(--accent-light)' : 'var(--bg-input)',
+            background: activeFiltersCount > 0 ? 'var(--accent-light)' : '#FFFFFF',
             color: activeFiltersCount > 0 ? 'var(--accent-dark)' : 'var(--text-secondary)',
-            border: `1px solid ${activeFiltersCount > 0 ? 'var(--accent)' : 'var(--border-default)'}`,
+            border: `1.5px solid ${activeFiltersCount > 0 ? 'var(--accent)' : 'var(--border-default)'}`,
             cursor: 'pointer',
             flexShrink: 0,
             position: 'relative',
+            boxShadow: '0 2px 8px rgba(0, 0, 0, 0.05)',
             transition: 'all 0.15s ease',
           }}
           title="Filtres avancés"
         >
-          <SlidersHorizontal size={18} />
+          <SlidersHorizontal size={20} />
           {activeFiltersCount > 0 && (
             <span
               style={{
                 position: 'absolute',
                 top: '-4px',
                 right: '-4px',
-                width: '18px',
-                height: '18px',
+                width: '20px',
+                height: '20px',
                 borderRadius: '50%',
                 background: 'var(--accent)',
                 color: '#FFFFFF',
-                fontSize: '0.68rem',
+                fontSize: '0.72rem',
                 fontWeight: 800,
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
+                border: '2px solid #FFFFFF',
                 boxShadow: '0 2px 5px rgba(0,0,0,0.15)',
               }}
             >

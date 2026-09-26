@@ -105,6 +105,7 @@ export const CatalogTab: React.FC<CatalogTabProps> = ({
   // Structure view state (FR-2, FR-3, Uncluttered Accordion & Cascade Deletions)
   const [expandedAreaIds, setExpandedAreaIds] = useState<Set<string>>(new Set());
   const [structureSearch, setStructureSearch] = useState('');
+  const [isStructureSearchFocused, setIsStructureSearchFocused] = useState(false);
   const [sectionToDelete, setSectionToDelete] = useState<{
     id: string;
     name: string;
@@ -542,29 +543,53 @@ export const CatalogTab: React.FC<CatalogTabProps> = ({
             </div>
 
             {/* Quick Shelf / Zone Filter Search & Expand Toggle */}
-            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-              <div style={{ position: 'relative', flex: 1 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', marginTop: '0.35rem' }}>
+              <div
+                style={{
+                  position: 'relative',
+                  flex: 1,
+                  display: 'flex',
+                  alignItems: 'center',
+                  background: '#FFFFFF',
+                  border: isStructureSearchFocused ? '1.5px solid var(--accent)' : '1.5px solid var(--border-default)',
+                  borderRadius: 'var(--radius-md)',
+                  minHeight: '48px',
+                  boxShadow: isStructureSearchFocused
+                    ? '0 0 0 3px rgba(245, 158, 11, 0.16), 0 2px 8px rgba(0, 0, 0, 0.05)'
+                    : '0 2px 6px rgba(0, 0, 0, 0.04)',
+                  transition: 'all 0.15s ease',
+                  padding: direction === 'rtl' ? '0 0.85rem 0 2.5rem' : '0 2.5rem 0 0.85rem',
+                }}
+              >
                 <Search
-                  size={15}
+                  size={20}
                   style={{
                     position: 'absolute',
-                    left: '0.7rem',
+                    [direction === 'rtl' ? 'right' : 'left']: '0.85rem',
                     top: '50%',
                     transform: 'translateY(-50%)',
-                    color: 'var(--text-muted)',
+                    color: isStructureSearchFocused ? 'var(--accent)' : 'var(--text-muted)',
+                    pointerEvents: 'none',
+                    transition: 'color 0.15s ease',
                   }}
                 />
                 <input
                   type="text"
-                  className="input-control"
                   placeholder={t('catalog.structure.filter_placeholder')}
                   value={structureSearch}
+                  onFocus={() => setIsStructureSearchFocused(true)}
+                  onBlur={() => setIsStructureSearchFocused(false)}
                   onChange={(e) => setStructureSearch(e.target.value)}
                   style={{
-                    paddingLeft: '2.1rem',
-                    paddingRight: structureSearch ? '2rem' : '0.75rem',
-                    fontSize: '0.8125rem',
-                    minHeight: '36px',
+                    width: '100%',
+                    height: '46px',
+                    background: 'transparent',
+                    border: 'none',
+                    outline: 'none',
+                    color: 'var(--text-primary)',
+                    fontSize: '0.9375rem',
+                    fontWeight: 500,
+                    padding: 0,
                   }}
                 />
                 {structureSearch && (
@@ -573,14 +598,19 @@ export const CatalogTab: React.FC<CatalogTabProps> = ({
                     onClick={() => setStructureSearch('')}
                     style={{
                       position: 'absolute',
-                      right: '0.5rem',
+                      [direction === 'rtl' ? 'left' : 'right']: '0.7rem',
                       top: '50%',
                       transform: 'translateY(-50%)',
-                      background: 'transparent',
+                      background: '#F1F5F9',
                       border: 'none',
-                      color: 'var(--text-muted)',
+                      borderRadius: '50%',
+                      color: 'var(--text-secondary)',
                       cursor: 'pointer',
-                      padding: '2px',
+                      width: '26px',
+                      height: '26px',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
                     }}
                   >
                     <X size={15} />
@@ -592,7 +622,16 @@ export const CatalogTab: React.FC<CatalogTabProps> = ({
                 type="button"
                 onClick={handleToggleAllAreas}
                 className="btn btn-secondary"
-                style={{ padding: '0.35rem 0.6rem', fontSize: '0.72rem', whiteSpace: 'nowrap', minHeight: '36px' }}
+                style={{
+                  padding: '0.65rem 0.85rem',
+                  fontSize: '0.78rem',
+                  fontWeight: 600,
+                  whiteSpace: 'nowrap',
+                  minHeight: '48px',
+                  borderRadius: 'var(--radius-md)',
+                  background: '#FFFFFF',
+                  boxShadow: '0 2px 6px rgba(0, 0, 0, 0.04)',
+                }}
                 title={expandedAreaIds.size === activeAreas.length ? t('catalog.structure.collapse_all') : t('catalog.structure.expand_all')}
               >
                 {expandedAreaIds.size === activeAreas.length ? t('catalog.structure.collapse_all') : t('catalog.structure.expand_all')}
@@ -1007,15 +1046,73 @@ export const CatalogTab: React.FC<CatalogTabProps> = ({
           </div>
 
           {/* Quick search input */}
-          <div style={{ marginBottom: '0.85rem' }}>
-            <input
-              type="text"
-              className="input-control"
-              placeholder={t('models.filter_placeholder')}
-              value={modelSearchQuery}
-              onChange={(e) => setModelSearchQuery(e.target.value)}
-              style={{ fontSize: '0.8125rem' }}
-            />
+          <div style={{ marginBottom: '1rem' }}>
+            <div
+              style={{
+                position: 'relative',
+                display: 'flex',
+                alignItems: 'center',
+                background: '#FFFFFF',
+                border: '1.5px solid var(--border-default)',
+                borderRadius: 'var(--radius-md)',
+                minHeight: '48px',
+                boxShadow: '0 2px 6px rgba(0, 0, 0, 0.04)',
+                padding: direction === 'rtl' ? '0 0.85rem 0 2.5rem' : '0 2.5rem 0 0.85rem',
+              }}
+            >
+              <Search
+                size={20}
+                style={{
+                  position: 'absolute',
+                  [direction === 'rtl' ? 'right' : 'left']: '0.85rem',
+                  top: '50%',
+                  transform: 'translateY(-50%)',
+                  color: 'var(--accent)',
+                  pointerEvents: 'none',
+                }}
+              />
+              <input
+                type="text"
+                placeholder={t('models.filter_placeholder')}
+                value={modelSearchQuery}
+                onChange={(e) => setModelSearchQuery(e.target.value)}
+                style={{
+                  width: '100%',
+                  height: '46px',
+                  background: 'transparent',
+                  border: 'none',
+                  outline: 'none',
+                  color: 'var(--text-primary)',
+                  fontSize: '0.9375rem',
+                  fontWeight: 500,
+                  padding: 0,
+                }}
+              />
+              {modelSearchQuery && (
+                <button
+                  type="button"
+                  onClick={() => setModelSearchQuery('')}
+                  style={{
+                    position: 'absolute',
+                    [direction === 'rtl' ? 'left' : 'right']: '0.7rem',
+                    top: '50%',
+                    transform: 'translateY(-50%)',
+                    background: '#F1F5F9',
+                    border: 'none',
+                    borderRadius: '50%',
+                    color: 'var(--text-secondary)',
+                    cursor: 'pointer',
+                    width: '26px',
+                    height: '26px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                  }}
+                >
+                  <X size={15} />
+                </button>
+              )}
+            </div>
           </div>
 
           <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
