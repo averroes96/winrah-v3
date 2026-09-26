@@ -10,7 +10,7 @@ import { ShoeModel, InventoryModelSnapshot } from '../types';
 
 export const GEMINI_STORAGE_KEY = 'winrah_gemini_api_key';
 export const GEMINI_MODEL_KEY = 'winrah_gemini_model';
-export const DEFAULT_GEMINI_MODEL = 'gemini-2.5-flash';
+export const DEFAULT_GEMINI_MODEL = 'gemini-3.8-flash';
 
 export interface GeminiConfig {
   apiKey: string;
@@ -45,7 +45,12 @@ export interface AiCycleCountResult {
 export function getGeminiConfig(): GeminiConfig | null {
   const apiKey = localStorage.getItem(GEMINI_STORAGE_KEY)?.trim();
   if (!apiKey) return null;
-  const model = localStorage.getItem(GEMINI_MODEL_KEY)?.trim() || DEFAULT_GEMINI_MODEL;
+  let model = localStorage.getItem(GEMINI_MODEL_KEY)?.trim() || DEFAULT_GEMINI_MODEL;
+  // Automatically migrate deprecated 2.0 or 2.5 models if saved in localStorage
+  if (model === 'gemini-2.0-flash' || model === 'gemini-2.5-flash') {
+    model = DEFAULT_GEMINI_MODEL;
+    localStorage.setItem(GEMINI_MODEL_KEY, model);
+  }
   return { apiKey, model };
 }
 
@@ -129,8 +134,9 @@ export async function testGeminiConnection(
     return { success: false, message: 'Aucune clé API Gemini configurée.' };
   }
 
+  const modelName = (cfg.model || DEFAULT_GEMINI_MODEL).replace(/^models\//, '').trim();
   const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(
-    cfg.model
+    modelName
   )}:generateContent?key=${encodeURIComponent(cfg.apiKey)}`;
 
   try {
@@ -228,8 +234,9 @@ Return ONLY a valid JSON object matching this schema:
   "notes": "optional overall observations"
 }`;
 
+  const modelName = (config.model || DEFAULT_GEMINI_MODEL).replace(/^models\//, '').trim();
   const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(
-    config.model
+    modelName
   )}:generateContent?key=${encodeURIComponent(config.apiKey)}`;
 
   const response = await fetch(endpoint, {
@@ -345,8 +352,9 @@ Return ONLY a valid JSON object matching this schema:
   "notes": "optional observations (e.g. 2 boxes were partially hidden behind a pillar)"
 }`;
 
+  const modelName = (config.model || DEFAULT_GEMINI_MODEL).replace(/^models\//, '').trim();
   const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(
-    config.model
+    modelName
   )}:generateContent?key=${encodeURIComponent(config.apiKey)}`;
 
   const response = await fetch(endpoint, {

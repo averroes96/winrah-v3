@@ -693,27 +693,55 @@ export const SettingsTab: React.FC<SettingsTabProps> = ({
           <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, marginBottom: '0.3rem', color: 'var(--text-primary)' }}>
             {language === 'ar' ? 'النموذج المستخدم' : 'Modèle de vision'}
           </label>
-          <select
-            value={geminiModel}
-            onChange={(e) => {
-              setGeminiModel(e.target.value);
-              setGeminiTestResult(null);
-            }}
-            style={{
-              width: '100%',
-              padding: '0.55rem 0.75rem',
-              fontSize: '0.82rem',
-              background: 'var(--bg-input)',
-              border: '1px solid var(--border-default)',
-              borderRadius: 'var(--radius-sm)',
-              color: 'var(--text-primary)',
-            }}
-          >
-            <option value="gemini-2.5-flash">Gemini 2.5 Flash (Recommandé)</option>
-            <option value="gemini-2.0-flash">Gemini 2.0 Flash</option>
-            <option value="gemini-1.5-flash">Gemini 1.5 Flash</option>
-            <option value="gemini-1.5-pro">Gemini 1.5 Pro</option>
-          </select>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
+            <select
+              value={['gemini-3.8-flash', 'gemini-2.0-flash', 'gemini-1.5-flash', 'gemini-1.5-pro'].includes(geminiModel) ? geminiModel : 'custom'}
+              onChange={(e) => {
+                const val = e.target.value;
+                if (val !== 'custom') {
+                  setGeminiModel(val);
+                }
+                setGeminiTestResult(null);
+              }}
+              style={{
+                width: '100%',
+                padding: '0.55rem 0.75rem',
+                fontSize: '0.82rem',
+                background: 'var(--bg-input)',
+                border: '1px solid var(--border-default)',
+                borderRadius: 'var(--radius-sm)',
+                color: 'var(--text-primary)',
+              }}
+            >
+              <option value="gemini-3.8-flash">Gemini 3.8 Flash (Recommandé par l'API)</option>
+              <option value="gemini-2.0-flash">Gemini 2.0 Flash</option>
+              <option value="gemini-1.5-flash">Gemini 1.5 Flash</option>
+              <option value="gemini-1.5-pro">Gemini 1.5 Pro</option>
+              <option value="custom">Personnalisé / Autre modèle...</option>
+            </select>
+
+            {(!['gemini-3.8-flash', 'gemini-2.0-flash', 'gemini-1.5-flash', 'gemini-1.5-pro'].includes(geminiModel) || geminiModel === 'custom') && (
+              <input
+                type="text"
+                value={geminiModel === 'custom' ? '' : geminiModel}
+                onChange={(e) => {
+                  setGeminiModel(e.target.value.trim());
+                  setGeminiTestResult(null);
+                }}
+                placeholder="ex: gemini-3.8-flash"
+                style={{
+                  width: '100%',
+                  padding: '0.45rem 0.65rem',
+                  fontSize: '0.8rem',
+                  fontFamily: 'monospace',
+                  background: 'var(--bg-input)',
+                  border: '1px solid var(--border-default)',
+                  borderRadius: 'var(--radius-sm)',
+                  color: 'var(--text-primary)',
+                }}
+              />
+            )}
+          </div>
         </div>
 
         {/* Feedback Alert */}
