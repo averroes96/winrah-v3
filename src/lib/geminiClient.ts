@@ -10,7 +10,7 @@ import { ShoeModel, InventoryModelSnapshot } from '../types';
 
 export const GEMINI_STORAGE_KEY = 'winrah_gemini_api_key';
 export const GEMINI_MODEL_KEY = 'winrah_gemini_model';
-export const DEFAULT_GEMINI_MODEL = 'gemini-2.5-flash';
+export const DEFAULT_GEMINI_MODEL = 'gemini-2.0-flash';
 
 export interface GeminiConfig {
   apiKey: string;
@@ -45,7 +45,12 @@ export interface AiCycleCountResult {
 export function getGeminiConfig(): GeminiConfig | null {
   const apiKey = localStorage.getItem(GEMINI_STORAGE_KEY)?.trim();
   if (!apiKey) return null;
-  const model = localStorage.getItem(GEMINI_MODEL_KEY)?.trim() || DEFAULT_GEMINI_MODEL;
+  let model = localStorage.getItem(GEMINI_MODEL_KEY)?.trim() || DEFAULT_GEMINI_MODEL;
+  // Automatically migrate legacy or invalid model references
+  if (model.includes('2.5')) {
+    model = DEFAULT_GEMINI_MODEL;
+    localStorage.setItem(GEMINI_MODEL_KEY, model);
+  }
   return { apiKey, model };
 }
 
