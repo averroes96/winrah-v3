@@ -92,11 +92,11 @@ if command -v xcodebuild >/dev/null 2>&1 && [ -d "/Applications/Xcode.app" ]; th
   echo "Xcode found. You can archive and sign the iOS app with Xcode."
 else
   echo "⚠️ Full Xcode (/Applications/Xcode.app) is not installed on this local environment."
-  echo "   The native iOS project has been fully updated and synchronized at: ios/App/App.xcworkspace"
+  echo "   The native iOS project has been fully updated and synchronized at: ios/App/App.xcodeproj"
   echo ""
   echo "   To generate the signed iOS .ipa:"
   echo "   Option A (Cloud CI): Trigger the GitHub Actions workflow at .github/workflows/deploy-ios.yml"
-  echo "   Option B (Local): Open ios/App/App.xcworkspace in Xcode on a Mac with Xcode installed, and choose Product > Archive."
+  echo "   Option B (Local): Open ios/App/App.xcodeproj in Xcode on a Mac with Xcode installed, and choose Product > Archive."
 fi
 
 echo ""

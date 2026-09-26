@@ -128,10 +128,16 @@ jobs:
           PROVISIONING_PROFILE_SPECIFIER: ${{ secrets.IOS_PROVISIONING_NAME }}
           CODE_SIGN_IDENTITY: ${{ secrets.IOS_CERT_IDENTITY || 'Apple Distribution' }}
         run: |
+          if [ -d "ios/App/App.xcworkspace" ]; then
+            TARGET_ARG="-workspace ios/App/App.xcworkspace"
+          else
+            TARGET_ARG="-project ios/App/App.xcodeproj"
+          fi
+
           # Build archive using standard Release configuration
           if [ "$HAS_SIGNING" = "true" ]; then
             xcodebuild archive \
-              -workspace ios/App/App.xcworkspace \
+              $TARGET_ARG \
               -scheme App \
               -configuration Release \
               -destination 'generic/platform=iOS' \
@@ -143,13 +149,14 @@ jobs:
           else
             echo "Building unsigned/development archive for artifact export..."
             xcodebuild archive \
-              -workspace ios/App/App.xcworkspace \
+              $TARGET_ARG \
               -scheme App \
               -configuration Release \
               -destination 'generic/platform=iOS' \
               -archivePath build/App.xcarchive \
               CODE_SIGNING_ALLOWED=NO \
-              CODE_SIGNING_REQUIRED=NO
+              CODE_SIGNING_REQUIRED=NO \
+              CODE_SIGN_IDENTITY=""
           fi
 
       - name: Export Signed .ipa
@@ -165,7 +172,7 @@ jobs:
         if: ${{ steps.check-secrets.outputs.has_signing != 'true' }}
         run: |
           mkdir -p build/output/Payload
-          cp -R build/App.xcarchive/Products/Applications/App.app build/output/Payload/
+          cp -R build/App.xcarchive/Products/Applications/*.app build/output/Payload/
           cd build/output
           zip -r winrah-ios-unsigned.ipa Payload
 
