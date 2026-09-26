@@ -24,7 +24,7 @@ This workflow runs on **Ubuntu** (`ubuntu-latest`), compiles the web app, syncs 
 
 ## 🍏 2. iOS Workflow: `.github/workflows/deploy-ios.yml`
 
-This workflow runs on **macOS** (`macos-14`), compiles the web app, syncs Capacitor, unlocks a temporary CI keychain with your Apple distribution certificate, archives, and exports the signed `.ipa`.
+This workflow runs on **macOS** (`macos-15` with Xcode 16), compiles the web app, syncs Capacitor, unlocks a temporary CI keychain with your Apple distribution certificate, archives, and exports the signed `.ipa`.
 
 ### Required GitHub Secrets (Repository Settings > Secrets and variables > Actions)
 
