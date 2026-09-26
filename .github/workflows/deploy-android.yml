@@ -74,6 +74,7 @@ jobs:
           KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
           KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
           KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+          PLAY_STORE_KEY: ${{ secrets.PLAY_STORE_JSON_KEY }}
         run: |
           mkdir -p android/app
           if [ -n "$KEYSTORE_BASE64" ]; then
@@ -90,6 +91,11 @@ jobs:
               -keypass "${KEY_PASSWORD:-winrah1234}" \
               -dname "CN=WINRAH CI, OU=Mobile, O=Winrah, L=Casablanca, C=MA"
             echo "has_keystore=generated" >> $GITHUB_OUTPUT
+          fi
+          if [ -n "$PLAY_STORE_KEY" ]; then
+            echo "has_play_store_key=true" >> $GITHUB_OUTPUT
+          else
+            echo "has_play_store_key=false" >> $GITHUB_OUTPUT
           fi
 
       - name: Build Signed APK
@@ -131,7 +137,7 @@ jobs:
           retention-days: 30
 
       - name: Publish to Google Play Store
-        if: ${{ github.event.inputs.deploy_to_play_store == 'true' && secrets.PLAY_STORE_JSON_KEY != '' }}
+        if: ${{ github.event.inputs.deploy_to_play_store == 'true' && steps.keystore.outputs.has_play_store_key == 'true' }}
         uses: r0adkll/upload-google-play@v1
         with:
           serviceAccountJsonPlainText: ${{ secrets.PLAY_STORE_JSON_KEY }}
