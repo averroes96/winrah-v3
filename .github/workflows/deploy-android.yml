@@ -58,6 +58,18 @@ jobs:
           java-version: 21
           cache: 'gradle'
 
+      - name: Configure Environment
+        run: |
+          cat << 'EOF' > .env
+          VITE_FIREBASE_API_KEY=AIzaSyBJcdc0Few9DMcZmD4RveM0iKftiEFkkRo
+          VITE_FIREBASE_AUTH_DOMAIN=winrah-v3.firebaseapp.com
+          VITE_FIREBASE_PROJECT_ID=winrah-v3
+          VITE_FIREBASE_STORAGE_BUCKET=winrah-v3.firebasestorage.app
+          VITE_FIREBASE_MESSAGING_SENDER_ID=61683626121
+          VITE_FIREBASE_APP_ID=1:61683626121:web:427b9520700f9dafcf9658
+          VITE_FIREBASE_MEASUREMENT_ID=G-QP76LWXQGX
+          EOF
+
       - name: Build Web Application
         run: npm run build
 

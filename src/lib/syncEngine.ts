@@ -11,10 +11,6 @@ import {
   fetchFirebaseDatabase,
   SyncProgressCallback,
 } from './firebaseClient';
-import {
-  isAppwriteConfigured,
-  pushRecordsToAppwrite,
-} from './appwriteClient';
 
 export interface SyncEngineStatus {
   isOnline: boolean;
@@ -22,7 +18,7 @@ export interface SyncEngineStatus {
   lastSyncedAt: string | null;
   pendingChangesCount: number;
   conflictCount: number;
-  mode: 'simulator' | 'firebase' | 'appwrite';
+  mode: 'simulator' | 'firebase';
 }
 
 class SyncEngine {
@@ -88,11 +84,7 @@ class SyncEngine {
 
     const lastSynced = localStorage.getItem('winrah_last_synced_at');
 
-    const mode: 'simulator' | 'firebase' | 'appwrite' = isFirebaseConfigured()
-      ? 'firebase'
-      : isAppwriteConfigured()
-      ? 'appwrite'
-      : 'simulator';
+    const mode: 'simulator' | 'firebase' = isFirebaseConfigured() ? 'firebase' : 'simulator';
 
     return {
       isOnline: this.isOnlineState,
@@ -121,14 +113,6 @@ class SyncEngine {
       if (isFirebaseConfigured()) {
         // High-speed batched Firebase Firestore push
         const pushResult = await pushRecordsToFirebase(false, onProgress);
-        pushed = pushResult.pushed;
-        if (pushResult.errors > 0 && pushResult.pushed === 0 && pushResult.lastError) {
-          throw new Error(pushResult.lastError);
-        }
-        pulled = 0;
-      } else if (isAppwriteConfigured()) {
-        // Appwrite Live Sync
-        const pushResult = await pushRecordsToAppwrite(false, onProgress);
         pushed = pushResult.pushed;
         if (pushResult.errors > 0 && pushResult.pushed === 0 && pushResult.lastError) {
           throw new Error(pushResult.lastError);
@@ -172,11 +156,7 @@ class SyncEngine {
       await db.putRaw('sync_logs', {
         id: 'sync-' + Date.now(),
         device_id: localStorage.getItem('winrah_device_id') || 'dev-local-01',
-        direction: isFirebaseConfigured()
-          ? 'firebase_firestore'
-          : isAppwriteConfigured()
-          ? 'appwrite_cloud'
-          : 'bidirectional',
+        direction: isFirebaseConfigured() ? 'firebase_firestore' : 'bidirectional',
         records_pushed: pushed,
         records_pulled: pulled,
         conflicts,
@@ -201,12 +181,7 @@ class SyncEngine {
     this.notify();
 
     try {
-      let res: { pushed: number; errors: number; lastError: string | null };
-      if (isFirebaseConfigured()) {
-        res = await pushRecordsToFirebase(true, onProgress);
-      } else {
-        res = await pushRecordsToAppwrite(true, onProgress);
-      }
+      const res = await pushRecordsToFirebase(true, onProgress);
 
       if (res.errors > 0 && res.pushed === 0 && res.lastError) {
         throw new Error(res.lastError);
@@ -218,7 +193,7 @@ class SyncEngine {
       await db.putRaw('sync_logs', {
         id: 'push-all-' + Date.now(),
         device_id: localStorage.getItem('winrah_device_id') || 'dev-local-01',
-        direction: isFirebaseConfigured() ? 'firebase_firestore' : 'appwrite_cloud',
+        direction: 'firebase_firestore',
         records_pushed: res.pushed,
         records_pulled: 0,
         conflicts: 0,

@@ -32,7 +32,6 @@ import {
   isFirebaseConfigured,
   SyncProgressUpdate,
 } from '../lib/firebaseClient';
-import { fetchServerDatabase } from '../lib/appwriteClient';
 
 interface SyncTabProps {
   onOpenDevicePairing: () => void;
@@ -143,10 +142,9 @@ export const SyncTab: React.FC<SyncTabProps> = ({
     setStatusFeedback(null);
     try {
       const res = await syncEngine.pushAllToCloud((p) => setSyncProgress(p));
-      const targetName = isFirebaseConfigured() ? 'Firebase Firestore' : 'Appwrite';
       setStatusFeedback({
         success: true,
-        text: `Base serveur vidée et base locale envoyée avec succès sur ${targetName} ! ${res.pushed} enregistrements synchronisés.`,
+        text: `Base serveur vidée et base locale envoyée avec succès sur Firebase Firestore ! ${res.pushed} enregistrements synchronisés.`,
       });
       await loadData();
       onRefreshData();
@@ -175,13 +173,10 @@ export const SyncTab: React.FC<SyncTabProps> = ({
     setIsFetchingServer(true);
     setStatusFeedback(null);
     try {
-      const res = isFirebaseConfigured()
-        ? await fetchFirebaseDatabase(true, (p) => setSyncProgress(p))
-        : await fetchServerDatabase(true, (p) => setSyncProgress(p));
-      const targetName = isFirebaseConfigured() ? 'Firebase Firestore' : 'Appwrite';
+      const res = await fetchFirebaseDatabase(true, (p) => setSyncProgress(p));
       setStatusFeedback({
         success: true,
-        text: `Base locale réinitialisée et base serveur (${targetName}) téléchargée avec succès (${res.total} enregistrements chargés).`,
+        text: `Base locale réinitialisée et base serveur (Firebase Firestore) téléchargée avec succès (${res.total} enregistrements chargés).`,
       });
       await loadData();
       onRefreshData();
@@ -313,7 +308,7 @@ export const SyncTab: React.FC<SyncTabProps> = ({
                 {status.isOnline ? 'Prêt à synchroniser' : 'Mode Hors-ligne actif'}
               </h2>
               <span className={`badge ${status.isOnline ? 'badge-emerald' : 'badge-rose'}`}>
-                {status.isOnline ? (status.mode === 'firebase' ? 'Firebase Firestore' : status.mode === 'appwrite' ? 'Appwrite' : 'Connecté') : 'Déconnecté'}
+                {status.isOnline ? 'Firebase Firestore' : 'Déconnecté'}
               </span>
               {status.pendingChangesCount > 0 && (
                 <span className="badge badge-amber" style={{ fontWeight: 700 }}>

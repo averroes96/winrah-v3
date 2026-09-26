@@ -40,7 +40,6 @@ import { useI18n } from '../i18n';
 import { Logo } from './Logo';
 import { exportCatalogToCsv, downloadBlob } from '../lib/csvHelper';
 import { fetchFirebaseDatabase, isFirebaseConfigured, SyncProgressUpdate } from '../lib/firebaseClient';
-import { fetchServerDatabase } from '../lib/appwriteClient';
 import { initBaseWarehouse } from '../db/seedData';
 import {
   getGeminiConfig,
@@ -160,13 +159,10 @@ export const SettingsTab: React.FC<SettingsTabProps> = ({
     setIsFetchingServer(true);
     setStatusFeedback(null);
     try {
-      const res = isFirebaseConfigured()
-        ? await fetchFirebaseDatabase(true, (p) => setSyncProgress(p))
-        : await fetchServerDatabase(true, (p) => setSyncProgress(p));
-      const targetName = isFirebaseConfigured() ? 'Firebase Firestore' : 'Appwrite';
+      const res = await fetchFirebaseDatabase(true, (p) => setSyncProgress(p));
       setStatusFeedback({
         success: true,
-        text: `Base locale réinitialisée et base serveur (${targetName}) téléchargée avec succès (${res.total} enregistrements chargés).`,
+        text: `Base locale réinitialisée et base serveur (Firebase Firestore) téléchargée avec succès (${res.total} enregistrements chargés).`,
       });
       await loadSyncData();
       onRefreshData();

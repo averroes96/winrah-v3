@@ -254,19 +254,21 @@ export const SearchTab: React.FC<SearchTabProps> = ({
   return (
     <div className="fade-in">
       {/* Prominent Search Row: Widen Input + Barcode Scanner + Filter Button */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', marginBottom: '1rem' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: '0.45rem', marginBottom: '1rem' }}>
         <div
           onClick={() => searchInputRef.current?.focus()}
           style={{
             flex: 1,
+            minWidth: 0,
             display: 'flex',
             alignItems: 'center',
-            gap: '0.75rem',
+            gap: '0.6rem',
             background: '#FFFFFF',
             border: isSearchFocused ? '2px solid var(--accent)' : '1.5px solid var(--border-default)',
             borderRadius: 'var(--radius-md)',
-            padding: '0 1rem',
-            minHeight: '52px',
+            padding: '0 0.85rem',
+            minHeight: '48px',
+            height: '48px',
             cursor: 'text',
             boxShadow: isSearchFocused
               ? '0 0 0 3px rgba(245, 158, 11, 0.18), 0 4px 12px rgba(0, 0, 0, 0.08)'
@@ -275,7 +277,7 @@ export const SearchTab: React.FC<SearchTabProps> = ({
           }}
         >
           <Search
-            size={22}
+            size={20}
             style={{
               color: isSearchFocused ? 'var(--accent)' : 'var(--text-muted)',
               flexShrink: 0,
@@ -299,16 +301,19 @@ export const SearchTab: React.FC<SearchTabProps> = ({
             className="ref-code"
             style={{
               flex: 1,
+              minWidth: 0,
+              width: '100%',
               background: 'transparent',
               border: 'none',
               outline: 'none',
               color: 'var(--text-primary)',
-              fontSize: '1.05rem',
+              fontSize: '0.975rem',
               fontWeight: 600,
-              letterSpacing: '0.3px',
+              letterSpacing: '0.2px',
               fontFamily: 'inherit',
-              padding: '0.75rem 0',
-              height: '50px',
+              padding: 0,
+              height: '100%',
+              textOverflow: 'ellipsis',
             }}
           />
 
@@ -330,15 +335,15 @@ export const SearchTab: React.FC<SearchTabProps> = ({
                 borderRadius: '50%',
                 color: 'var(--text-secondary)',
                 cursor: 'pointer',
-                width: '28px',
-                height: '28px',
+                width: '26px',
+                height: '26px',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
                 flexShrink: 0,
               }}
             >
-              <X size={16} />
+              <X size={15} />
             </button>
           )}
         </div>
@@ -351,23 +356,23 @@ export const SearchTab: React.FC<SearchTabProps> = ({
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
-            width: '52px',
-            height: '52px',
+            width: '46px',
+            height: '48px',
             borderRadius: 'var(--radius-md)',
             background: 'linear-gradient(135deg, #F59E0B 0%, #D97706 100%)',
             color: '#FFFFFF',
             border: 'none',
             cursor: 'pointer',
             flexShrink: 0,
-            boxShadow: '0 4px 12px rgba(217, 119, 6, 0.35)',
+            boxShadow: '0 3px 10px rgba(217, 119, 6, 0.35)',
             transition: 'transform 0.1s ease',
           }}
           title={t('search.scan_tooltip')}
         >
-          <ScanBarcode size={22} />
+          <ScanBarcode size={21} />
         </button>
 
-        {/* Advanced Filter Button with Active Badge */}
+        {/* Advanced Filter Button with Active Badge - Always Visible */}
         <button
           type="button"
           onClick={() => setIsFilterModalOpen(true)}
@@ -375,33 +380,33 @@ export const SearchTab: React.FC<SearchTabProps> = ({
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
-            width: '52px',
-            height: '52px',
+            width: '46px',
+            height: '48px',
             borderRadius: 'var(--radius-md)',
             background: activeFiltersCount > 0 ? 'var(--accent-light)' : '#FFFFFF',
-            color: activeFiltersCount > 0 ? 'var(--accent-dark)' : 'var(--text-secondary)',
+            color: activeFiltersCount > 0 ? 'var(--accent-dark)' : 'var(--text-primary)',
             border: `1.5px solid ${activeFiltersCount > 0 ? 'var(--accent)' : 'var(--border-default)'}`,
             cursor: 'pointer',
             flexShrink: 0,
             position: 'relative',
-            boxShadow: '0 2px 8px rgba(0, 0, 0, 0.05)',
+            boxShadow: '0 2px 6px rgba(0, 0, 0, 0.05)',
             transition: 'all 0.15s ease',
           }}
           title="Filtres avancés"
         >
-          <SlidersHorizontal size={20} />
+          <SlidersHorizontal size={19} />
           {activeFiltersCount > 0 && (
             <span
               style={{
                 position: 'absolute',
                 top: '-4px',
                 right: '-4px',
-                width: '20px',
-                height: '20px',
+                width: '18px',
+                height: '18px',
                 borderRadius: '50%',
                 background: 'var(--accent)',
                 color: '#FFFFFF',
-                fontSize: '0.72rem',
+                fontSize: '0.7rem',
                 fontWeight: 800,
                 display: 'flex',
                 alignItems: 'center',

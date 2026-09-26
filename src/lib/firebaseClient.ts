@@ -87,33 +87,42 @@ export const WIPABLE_FIREBASE_COLLECTIONS = [
   FIREBASE_COLLECTIONS.warehouses,
 ] as const;
 
+export const DEFAULT_FIREBASE_CONFIG: FirebaseConfig = {
+  apiKey: 'AIzaSyBJcdc0Few9DMcZmD4RveM0iKftiEFkkRo',
+  authDomain: 'winrah-v3.firebaseapp.com',
+  projectId: 'winrah-v3',
+  storageBucket: 'winrah-v3.firebasestorage.app',
+  messagingSenderId: '61683626121',
+  appId: '1:61683626121:web:427b9520700f9dafcf9658',
+};
+
 export function getFirebaseConfig(): FirebaseConfig {
   const env = (import.meta as any).env || {};
   return {
     apiKey:
       env.VITE_FIREBASE_API_KEY ||
       localStorage.getItem('winrah_firebase_api_key') ||
-      '',
+      DEFAULT_FIREBASE_CONFIG.apiKey,
     authDomain:
       env.VITE_FIREBASE_AUTH_DOMAIN ||
       localStorage.getItem('winrah_firebase_auth_domain') ||
-      '',
+      DEFAULT_FIREBASE_CONFIG.authDomain,
     projectId:
       env.VITE_FIREBASE_PROJECT_ID ||
       localStorage.getItem('winrah_firebase_project_id') ||
-      '',
+      DEFAULT_FIREBASE_CONFIG.projectId,
     storageBucket:
       env.VITE_FIREBASE_STORAGE_BUCKET ||
       localStorage.getItem('winrah_firebase_storage_bucket') ||
-      '',
+      DEFAULT_FIREBASE_CONFIG.storageBucket,
     messagingSenderId:
       env.VITE_FIREBASE_MESSAGING_SENDER_ID ||
       localStorage.getItem('winrah_firebase_messaging_sender_id') ||
-      '',
+      DEFAULT_FIREBASE_CONFIG.messagingSenderId,
     appId:
       env.VITE_FIREBASE_APP_ID ||
       localStorage.getItem('winrah_firebase_app_id') ||
-      '',
+      DEFAULT_FIREBASE_CONFIG.appId,
   };
 }
 
