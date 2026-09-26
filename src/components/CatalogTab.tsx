@@ -20,6 +20,7 @@ import {
   ChevronRight,
   AlertTriangle,
   Loader2,
+  Upload,
 } from 'lucide-react';
 import {
   Warehouse,
@@ -45,6 +46,7 @@ interface CatalogTabProps {
   onRefreshData: () => void;
   onOpenQuickAdd?: () => void;
   onNavigateToSearch?: (query?: string) => void;
+  onOpenImportModal?: () => void;
 }
 
 export const CatalogTab: React.FC<CatalogTabProps> = ({
@@ -57,6 +59,7 @@ export const CatalogTab: React.FC<CatalogTabProps> = ({
   onRefreshData,
   onOpenQuickAdd,
   onNavigateToSearch,
+  onOpenImportModal,
 }) => {
   const { direction, t } = useI18n();
   const [activeSubTab, setActiveSubTab] = useState<'structure' | 'map' | 'models'>('structure');
@@ -499,6 +502,19 @@ export const CatalogTab: React.FC<CatalogTabProps> = ({
                   <Plus size={13} />
                   <span>{t('catalog.structure.add_section')}</span>
                 </button>
+
+                {onOpenImportModal && (
+                  <button
+                    type="button"
+                    onClick={onOpenImportModal}
+                    className="btn btn-secondary"
+                    style={{ padding: '0.35rem 0.65rem', fontSize: '0.78rem', gap: '0.3rem' }}
+                    title="Importer la base de données WINRAH v2 d'origine ou un fichier CSV"
+                  >
+                    <Upload size={13} style={{ color: 'var(--accent)' }} />
+                    <span>Import v2 / CSV</span>
+                  </button>
+                )}
               </div>
             </div>
 
@@ -876,15 +892,29 @@ export const CatalogTab: React.FC<CatalogTabProps> = ({
         <div className="fade-in">
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.85rem' }}>
             <h3 style={{ fontSize: '1.05rem', fontWeight: 800 }}>{t('models.title', { count: models.length })}</h3>
-            <button
-              type="button"
-              onClick={() => (onOpenQuickAdd ? onOpenQuickAdd() : setIsAddModelOpen(true))}
-              className="btn btn-primary"
-              style={{ padding: '0.45rem 0.85rem', fontSize: '0.8rem' }}
-            >
-              <Plus size={16} />
-              <span>{t('models.add_model')}</span>
-            </button>
+            <div style={{ display: 'flex', gap: '0.4rem', alignItems: 'center' }}>
+              {onOpenImportModal && (
+                <button
+                  type="button"
+                  onClick={onOpenImportModal}
+                  className="btn btn-secondary"
+                  style={{ padding: '0.45rem 0.75rem', fontSize: '0.8rem', gap: '0.35rem' }}
+                  title="Importer la base WINRAH v2 d'origine ou un fichier CSV"
+                >
+                  <Upload size={14} style={{ color: 'var(--accent)' }} />
+                  <span>Import v2 / CSV</span>
+                </button>
+              )}
+              <button
+                type="button"
+                onClick={() => (onOpenQuickAdd ? onOpenQuickAdd() : setIsAddModelOpen(true))}
+                className="btn btn-primary"
+                style={{ padding: '0.45rem 0.85rem', fontSize: '0.8rem' }}
+              >
+                <Plus size={16} />
+                <span>{t('models.add_model')}</span>
+              </button>
+            </div>
           </div>
 
           {/* Quick search input */}

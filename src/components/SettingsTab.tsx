@@ -27,6 +27,7 @@ import {
   Layers,
   Database,
   Info,
+  Sparkles,
 } from 'lucide-react';
 import { syncEngine, SyncEngineStatus } from '../lib/syncEngine';
 import { db } from '../db/indexedDb';
@@ -576,6 +577,44 @@ export const SettingsTab: React.FC<SettingsTabProps> = ({
         <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: '0.85rem' }}>
           Sauvegardez votre catalogue sur votre téléphone ou importez un fichier CSV (compatible v2 et v3).
         </p>
+
+        {/* Highlighted WINRAH v2 database 1-click import */}
+        <div
+          style={{
+            padding: '0.85rem 1rem',
+            background: 'linear-gradient(135deg, rgba(217, 119, 6, 0.08) 0%, rgba(245, 158, 11, 0.14) 100%)',
+            border: '1px solid rgba(217, 119, 6, 0.25)',
+            borderRadius: 'var(--radius-md)',
+            marginBottom: '0.85rem',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            flexWrap: 'wrap',
+            gap: '0.6rem',
+          }}
+        >
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+            <Sparkles size={18} style={{ color: 'var(--accent)' }} />
+            <div>
+              <div style={{ fontWeight: 800, fontSize: '0.82rem', color: 'var(--text-primary)' }}>
+                Base WINRAH v2 d'origine
+              </div>
+              <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>
+                1 484 articles • 101 rayons (A1-D27)
+              </div>
+            </div>
+          </div>
+
+          <button
+            type="button"
+            onClick={onOpenImportModal}
+            className="btn btn-primary"
+            style={{ padding: '0.45rem 0.85rem', fontSize: '0.78rem', gap: '0.35rem' }}
+          >
+            <Database size={14} />
+            <span>Charger Base v2</span>
+          </button>
+        </div>
 
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.6rem' }}>
           <button
