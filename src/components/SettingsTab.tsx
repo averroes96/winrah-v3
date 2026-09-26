@@ -695,7 +695,7 @@ export const SettingsTab: React.FC<SettingsTabProps> = ({
           </label>
           <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
             <select
-              value={['gemini-3.8-flash', 'gemini-2.0-flash', 'gemini-1.5-flash', 'gemini-1.5-pro'].includes(geminiModel) ? geminiModel : 'custom'}
+              value={['gemini-3.8-flash', 'gemini-3.5-flash-lite', 'gemini-3.7-flash', 'gemini-3.5-flash', 'gemini-3.1-pro-preview', 'gemini-2.5-flash'].includes(geminiModel) ? geminiModel : 'custom'}
               onChange={(e) => {
                 const val = e.target.value;
                 if (val !== 'custom') {
@@ -713,14 +713,16 @@ export const SettingsTab: React.FC<SettingsTabProps> = ({
                 color: 'var(--text-primary)',
               }}
             >
-              <option value="gemini-3.8-flash">Gemini 3.8 Flash (Recommandé par l'API)</option>
-              <option value="gemini-2.0-flash">Gemini 2.0 Flash</option>
-              <option value="gemini-1.5-flash">Gemini 1.5 Flash</option>
-              <option value="gemini-1.5-pro">Gemini 1.5 Pro</option>
+              <option value="gemini-3.8-flash">Gemini 3.8 Flash (Recommandé - Stable)</option>
+              <option value="gemini-3.5-flash-lite">Gemini 3.5 Flash-Lite (Ultra rapide & Léger)</option>
+              <option value="gemini-3.7-flash">Gemini 3.7 Flash</option>
+              <option value="gemini-3.5-flash">Gemini 3.5 Flash</option>
+              <option value="gemini-3.1-pro-preview">Gemini 3.1 Pro (Preview - Haute intelligence)</option>
+              <option value="gemini-2.5-flash">Gemini 2.5 Flash (Accès restreint)</option>
               <option value="custom">Personnalisé / Autre modèle...</option>
             </select>
 
-            {(!['gemini-3.8-flash', 'gemini-2.0-flash', 'gemini-1.5-flash', 'gemini-1.5-pro'].includes(geminiModel) || geminiModel === 'custom') && (
+            {(!['gemini-3.8-flash', 'gemini-3.5-flash-lite', 'gemini-3.7-flash', 'gemini-3.5-flash', 'gemini-3.1-pro-preview', 'gemini-2.5-flash'].includes(geminiModel) || geminiModel === 'custom') && (
               <input
                 type="text"
                 value={geminiModel === 'custom' ? '' : geminiModel}
