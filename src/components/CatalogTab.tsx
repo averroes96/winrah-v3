@@ -153,12 +153,6 @@ export const CatalogTab: React.FC<CatalogTabProps> = ({
     return map;
   }, [modelSections]);
 
-  // Expand all areas initially when active areas load
-  React.useEffect(() => {
-    if (activeAreas.length > 0) {
-      setExpandedAreaIds(new Set(activeAreas.map((a) => a.id)));
-    }
-  }, [activeAreas.map((a) => a.id).join(',')]);
 
   // Auto-expand all matching areas when searching
   React.useEffect(() => {
