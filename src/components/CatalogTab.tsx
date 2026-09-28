@@ -22,6 +22,7 @@ import {
   Loader2,
   Sparkles,
   ClipboardList,
+  FileText,
 } from 'lucide-react';
 import {
   Warehouse,
@@ -51,6 +52,7 @@ interface CatalogTabProps {
   onOpenQuickAdd?: () => void;
   onNavigateToSearch?: (query?: string) => void;
   onOpenSettings?: () => void;
+  onOpenBatchImport?: () => void;
 }
 
 export const CatalogTab: React.FC<CatalogTabProps> = ({
@@ -64,6 +66,7 @@ export const CatalogTab: React.FC<CatalogTabProps> = ({
   onOpenQuickAdd,
   onNavigateToSearch,
   onOpenSettings,
+  onOpenBatchImport,
 }) => {
   const { direction, language, t } = useI18n();
   const [activeSubTab, setActiveSubTab] = useState<'structure' | 'map'>('structure');
@@ -484,6 +487,27 @@ export const CatalogTab: React.FC<CatalogTabProps> = ({
               </div>
 
               <div style={{ display: 'flex', gap: '0.4rem', alignItems: 'center', flexWrap: 'wrap' }}>
+                {onOpenBatchImport && (
+                  <button
+                    type="button"
+                    onClick={onOpenBatchImport}
+                    className="btn btn-secondary"
+                    style={{
+                      padding: '0.35rem 0.65rem',
+                      fontSize: '0.78rem',
+                      gap: '0.35rem',
+                      background: 'rgba(37, 99, 235, 0.08)',
+                      color: '#2563EB',
+                      borderColor: 'rgba(37, 99, 235, 0.25)',
+                      fontWeight: 700,
+                    }}
+                    title={language === 'ar' ? 'استيراد وصل تسليم بالذكاء الاصطناعي' : 'Importer un bon de livraison par IA'}
+                  >
+                    <FileText size={13} />
+                    <span>{t('batch_import.open_button')}</span>
+                  </button>
+                )}
+
                 <button
                   type="button"
                   onClick={() => setIsAddAreaOpen(true)}

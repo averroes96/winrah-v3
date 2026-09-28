@@ -39,6 +39,19 @@ export interface AiCycleCountResult {
   notes?: string | null;
 }
 
+export interface AiExtractedDeliveryItem {
+  reference_code: string;
+  location?: string | null;
+  product_name?: string | null;
+}
+
+export interface AiDeliverySlipResult {
+  items: AiExtractedDeliveryItem[];
+  confidence: 'high' | 'medium' | 'low';
+  total_detected: number;
+  notes?: string | null;
+}
+
 /**
  * Retrieve saved Gemini settings from device localStorage.
  */
@@ -415,5 +428,141 @@ Return ONLY a valid JSON object matching this schema:
   } catch (err: any) {
     console.error('Failed to parse Gemini Cycle Count JSON output:', textContent, err);
     throw new Error('Impossible de lire la structure JSON de comptage retournée par Gemini.');
+  }
+}
+
+/**
+ * FEATURE 3: Delivery Slip Multi-Model & Location Extractor
+ * Analyzes photos of delivery slips ("Bon de livraison", "Facture") to extract
+ * printed reference codes and their adjacent handwritten shelf/location notations.
+ */
+export async function extractModelsFromDeliverySlip(
+  images: File[]
+): Promise<AiDeliverySlipResult> {
+  const config = getGeminiConfig();
+  if (!config) {
+    throw new Error('Clé API Gemini non configurée. Veuillez l\'ajouter dans les Paramètres.');
+  }
+
+  if (images.length === 0) {
+    throw new Error('Veuillez fournir au moins une photo du bon de livraison.');
+  }
+
+  // Optimize & base64 encode all images with high resolution for crisp text OCR
+  const encodedImages = await Promise.all(
+    images.map((img) => optimizeImageForVision(img, 1800, 0.88))
+  );
+
+  const imageParts = encodedImages.map((img) => ({
+    inlineData: {
+      data: img.base64,
+      mimeType: img.mimeType,
+    },
+  }));
+
+  const systemPrompt = `You are a high-precision computer vision AI specialized in shoe warehouse delivery receipts ("Bon de livraison", "Bordereau de réception", "Facture").
+
+CONTEXT & LAYOUT:
+The image shows a paper delivery slip with printed columns such as:
+"Référence | Désignation du Produit | Point | Qte. (Cart.) | ...".
+In this warehouse, next to each printed shoe reference code (e.g., "HS-55", "HS-72", "163-40", "A36", "TM124", "L-9B", "858-10", "311-3", "279-15"), the warehouse receiver or clerk writes the assigned warehouse shelf/location code by hand with a blue or black pen (for example: "C18", "C15", "C17", "C3", "C20", "C14", "C2", "C1", "C101", "C6", "C8", "C12", "C9", "C7", "C13", "C4", "C10", "C16", "C19", "C21", "C11", "C5", etc.).
+
+CRITICAL NOTE ON MULTI-COLUMN LAYOUT:
+Delivery slips frequently organize lines into multiple side-by-side vertical columns (e.g. left column lines 1 to 25, middle/right column lines 26 to 55).
+You MUST inspect and extract items from ALL columns across the entire document from top to bottom. Do not miss any column!
+
+YOUR EXACT EXTRACTION TASK:
+Your ONLY concern is extracting:
+1. reference_code: The printed shoe model reference (e.g. "HS-55", "HS-72", "163-40", "A36", "TM124", "L-9B", "858-10", "311-3", "279-15", etc.).
+2. location: The corresponding handwritten (or printed) shelf/section code written next to the reference (e.g. "C18", "C15", "C6", "C101", "C4", "C1", etc.).
+   - If no location is written for an item, set location to null.
+   - If an item has an "X" or cross mark, still extract the reference and location.
+3. product_name: The printed product designation/name (e.g. "BOOTS LUX 27", "BTS LUX 2027") if present, otherwise null.
+
+Format requirements:
+- Clean and normalize reference codes (e.g. uppercase, maintain hyphens like "HS-55").
+- Clean and normalize location codes (e.g. "C18", "C1", "C101", remove extra punctuation or spaces).
+- If multiple lines appear, list every single one in document order.
+
+Return ONLY a valid JSON object matching this schema:
+{
+  "items": [
+    {
+      "reference_code": "HS-55",
+      "location": "C18",
+      "product_name": "BOOTS LUX 27"
+    }
+  ],
+  "confidence": "high" | "medium" | "low",
+  "total_detected": 1,
+  "notes": "optional observations on legibility"
+}`;
+
+  const modelName = (config.model || DEFAULT_GEMINI_MODEL).replace(/^models\//, '').trim();
+  const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(
+    modelName
+  )}:generateContent?key=${encodeURIComponent(config.apiKey)}`;
+
+  const response = await fetch(endpoint, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      contents: [
+        {
+          parts: [...imageParts, { text: systemPrompt }],
+        },
+      ],
+      generationConfig: {
+        responseMimeType: 'application/json',
+        temperature: 0.1,
+      },
+    }),
+  });
+
+  if (!response.ok) {
+    const errJson = await response.json().catch(() => null);
+    const detail = errJson?.error?.message || `HTTP ${response.status} ${response.statusText}`;
+    throw new Error(`Erreur API Gemini: ${detail}`);
+  }
+
+  const jsonResult = await response.json();
+  const textContent = jsonResult.candidates?.[0]?.content?.parts?.[0]?.text;
+  if (!textContent) {
+    throw new Error('Réponse vide de l\'API Gemini.');
+  }
+
+  try {
+    const parsed = JSON.parse(textContent) as {
+      items?: Array<{ reference_code?: string; location?: string | null; product_name?: string | null }>;
+      confidence?: 'high' | 'medium' | 'low';
+      total_detected?: number;
+      notes?: string | null;
+    };
+
+    const rawItems = Array.isArray(parsed.items) ? parsed.items : [];
+    const normalizedItems: AiExtractedDeliveryItem[] = rawItems
+      .filter((it) => it && (it.reference_code || '').trim().length > 0)
+      .map((it) => {
+        const cleanRef = (it.reference_code || '').trim().toUpperCase();
+        const rawLoc = (it.location || '').trim().toUpperCase();
+        // Clean location (remove trailing dots, crosses, etc.)
+        const cleanLoc = rawLoc.replace(/[^A-Z0-9-]/g, '');
+
+        return {
+          reference_code: cleanRef,
+          location: cleanLoc || null,
+          product_name: (it.product_name || '').trim() || null,
+        };
+      });
+
+    return {
+      items: normalizedItems,
+      confidence: parsed.confidence || 'medium',
+      total_detected: normalizedItems.length,
+      notes: parsed.notes || null,
+    };
+  } catch (err: any) {
+    console.error('Failed to parse Gemini Delivery Slip JSON output:', textContent, err);
+    throw new Error('Impossible de lire les données retournées par Gemini.');
   }
 }

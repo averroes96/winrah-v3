@@ -15,6 +15,7 @@ import {
   AlertCircle,
   PlusCircle,
   Repeat,
+  FileText,
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import { Warehouse, Area, Section, ShoeModel } from '../types';
@@ -31,6 +32,7 @@ interface QuickAddModelBottomSheetProps {
   existingModels: ShoeModel[];
   onSuccess: () => void;
   onOpenScanner?: () => void;
+  onOpenBatchImport?: () => void;
   initialReference?: string;
 }
 
@@ -43,6 +45,7 @@ export const QuickAddModelBottomSheet: React.FC<QuickAddModelBottomSheetProps> =
   existingModels,
   onSuccess,
   onOpenScanner,
+  onOpenBatchImport,
   initialReference = '',
 }) => {
   const { language, direction, t } = useI18n();
@@ -297,6 +300,47 @@ export const QuickAddModelBottomSheet: React.FC<QuickAddModelBottomSheetProps> =
             <X size={20} />
           </button>
         </div>
+
+        {/* Switch to Batch / Delivery Slip Import Mode */}
+        {onOpenBatchImport && (
+          <div style={{ padding: '0.65rem 1.25rem 0.25rem 1.25rem', background: '#FFFFFF' }}>
+            <button
+              type="button"
+              onClick={() => {
+                onClose();
+                onOpenBatchImport();
+              }}
+              className="btn btn-secondary"
+              style={{
+                width: '100%',
+                padding: '0.55rem 0.85rem',
+                fontSize: '0.8rem',
+                fontWeight: 700,
+                gap: '0.5rem',
+                justifyContent: 'center',
+                background: 'linear-gradient(135deg, rgba(37, 99, 235, 0.08) 0%, rgba(99, 102, 241, 0.12) 100%)',
+                border: '1.5px solid rgba(37, 99, 235, 0.25)',
+                color: '#2563EB',
+                borderRadius: 'var(--radius-md)',
+              }}
+            >
+              <FileText size={16} />
+              <span>{t('batch_import.title')}</span>
+              <span
+                style={{
+                  fontSize: '0.62rem',
+                  fontWeight: 800,
+                  background: '#2563EB',
+                  color: '#fff',
+                  padding: '1px 6px',
+                  borderRadius: '999px',
+                }}
+              >
+                IA
+              </span>
+            </button>
+          </div>
+        )}
 
         {/* Batch Success Toast */}
         {successToast && (

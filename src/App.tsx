@@ -28,6 +28,7 @@ import { TransferModal } from './components/TransferModal';
 import { ModelDetailModal } from './components/ModelDetailModal';
 import { DevicePairingModal } from './components/DevicePairingModal';
 import { QuickAddModelBottomSheet } from './components/QuickAddModelBottomSheet';
+import { BatchModelImportModal } from './components/BatchModelImportModal';
 
 import { db } from './db/indexedDb';
 import { initBaseWarehouse } from './db/seedData';
@@ -51,6 +52,7 @@ export function App() {
   const { t } = useI18n();
   const [activeTab, setActiveTab] = useState<ActiveTab>('search');
   const [isQuickAddOpen, setIsQuickAddOpen] = useState(false);
+  const [isBatchImportOpen, setIsBatchImportOpen] = useState(false);
   const [isCsvImportModalOpen, setIsCsvImportModalOpen] = useState(false);
   const [scannerTargetCallback, setScannerTargetCallback] = useState<((code: string) => void) | null>(null);
   const [quickAddInitialRef, setQuickAddInitialRef] = useState('');
@@ -207,6 +209,11 @@ export function App() {
           setIsQuickAddOpen(false);
           return;
         }
+        // 0b. If Batch Import modal is open, close it
+        if (isBatchImportOpen) {
+          setIsBatchImportOpen(false);
+          return;
+        }
         // 1. If Barcode Scanner modal is open, close it cleanly!
         if (isBarcodeModalOpen) {
           setIsBarcodeModalOpen(false);
@@ -254,6 +261,8 @@ export function App() {
       }
     };
   }, [
+    isQuickAddOpen,
+    isBatchImportOpen,
     isBarcodeModalOpen,
     isWarehouseModalOpen,
     isPairingModalOpen,
@@ -318,6 +327,7 @@ export function App() {
               setQuickAddInitialRef('');
               setIsQuickAddOpen(true);
             }}
+            onOpenBatchImport={() => setIsBatchImportOpen(true)}
             onNavigateToSearch={(q) => {
               setActiveTab('search');
               if (q) setSearchQuery(q);
@@ -486,6 +496,7 @@ export function App() {
         existingModels={models}
         initialReference={quickAddInitialRef}
         onSuccess={refreshData}
+        onOpenBatchImport={() => setIsBatchImportOpen(true)}
         onOpenScanner={() => {
           setScannerTargetCallback(() => (scannedCode: string) => {
             setQuickAddInitialRef(scannedCode);
@@ -501,6 +512,18 @@ export function App() {
         onClose={() => setIsCsvImportModalOpen(false)}
         onSuccess={refreshData}
         activeWarehouse={activeWarehouse}
+      />
+
+      {/* Batch Model Import & Delivery Slip Scanner Modal */}
+      <BatchModelImportModal
+        isOpen={isBatchImportOpen}
+        onClose={() => setIsBatchImportOpen(false)}
+        activeWarehouse={activeWarehouse}
+        sections={sections}
+        areas={areas}
+        existingModels={models}
+        onSuccess={refreshData}
+        onOpenSettings={() => setActiveTab('settings')}
       />
     </div>
   );
