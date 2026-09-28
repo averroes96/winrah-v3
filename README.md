@@ -1,76 +1,134 @@
-# WINRAH — Shoe Warehouse Management App (v3.0)
+# WINRAH — Shoe Warehouse Management App (v1.1.3)
 
 > **Codename:** `winrah` (وين راه — *"Where is it?"*)  
-> Mobile-first, offline-first application designed for shoe warehouse operations.
+> A mobile-first, offline-first physical inventory localization platform tailored for shoe wholesale and warehouse operations.
+
+[![Release](https://img.shields.io/badge/Release-v1.1.3-amber.svg)](https://github.com/averroes96/winrah-v3/releases/tag/v1.1.3)
+[![CI/CD Android](https://github.com/averroes96/winrah-v3/actions/workflows/deploy-android.yml/badge.svg)](https://github.com/averroes96/winrah-v3/actions/workflows/deploy-android.yml)
+[![CI/CD iOS](https://github.com/averroes96/winrah-v3/actions/workflows/deploy-ios.yml/badge.svg)](https://github.com/averroes96/winrah-v3/actions/workflows/deploy-ios.yml)
+[![React 19](https://img.shields.io/badge/React-19-blue.svg)](https://react.dev/)
+[![Capacitor 8](https://img.shields.io/badge/Capacitor-8-119EFF.svg)](https://capacitorjs.com/)
+[![Firebase Firestore](https://img.shields.io/badge/Firebase-Firestore-FFA611.svg)](https://firebase.google.com/)
 
 ---
 
 ## 👟 Overview & Philosophy
 
-Traditional shoe warehouses struggle with slow retrieval and lost stock because inventory tracking is manual or tied to unreliable internet connections in large concrete/metal warehouse facilities.
+In shoe wholesale and distribution facilities, staff lose hours daily hunting for specific shoe models across hundreds of shelves. Standard ERPs fail because:
+1. Large concrete and steel warehouses frequently have **zero cellular or Wi-Fi connectivity**.
+2. Staff only need to answer one critical question: **"Where is model HS-108 right now?"** (Location tracking, **not** quantity/unit counting).
+3. Shoe manufacturers routinely reuse reference codes across seasons or product lines (**duplicate references**), causing rigid ERP databases to throw uniqueness validation errors.
 
-**WINRAH** solves this with an **offline-first** design:
-1. **Tracks Location, NOT Quantities:** The app’s primary job is to answer *"Where is model HS-21 right now?"* rather than counting units.
-2. **Duplicate References Allowed & Disambiguated (FR-4.7 & FR-4.8):** Different entries can share the same reference code (e.g. `HS-21`). The app automatically disambiguates them in search and edit views with an auto-generated display index (`HS-21 (1)`, `HS-21 (2)`), current section, and creation date.
-3. **100% Offline-First (IndexedDB):** All writes, searches, and transfers happen locally first and are never lost on crash or force-close.
-4. **Device-to-Device Offline Exchange (FR-7.4):** Two phones on the warehouse floor with zero network connection can exchange data directly via an appairing QR code and portable JSON changeset.
-5. **Zero-Result Search Gap Detection (FR-8.2, FR-8.3):** Every search is logged. Failed searches immediately flag potential stock or labeling gaps in an analytics dashboard.
+**WINRAH** is designed from the ground up to solve these problems:
+
+* **Location-First, Not Unit-Counting:** Pinpoints physical shelf placement (e.g. `Rayon A10`, `Zone A`) in <100ms.
+* **Smart Reference Disambiguation (FR-4.7 & FR-4.8):** Multiple distinct shoe models can legally share identical reference codes (e.g. `HS-21`). WINRAH automatically disambiguates them in search and edit views with visual index chips (`HS-21 (1)`, `HS-21 (2)`), thumbnail previews, price, and current shelf locations.
+* **100% Offline-First Architecture:** Built on IndexedDB (`winrah_db`). All searches, moves, scans, and structure edits execute instantaneously on-device and persist locally across crashes or battery drains.
+* **Zero-Result Gap Telemetry (FR-8.2 & FR-8.3):** Unanswered searches are logged locally. An audit dashboard detects missing stock, misplaced pairs, or barcode discrepancies before customers walk away.
+* **Peer-to-Peer Offline Sync (FR-7.4):** Warehouse workers can sync changes between phones completely offline via animated pairing QR codes and JSON delta change-sets.
 
 ---
 
-## 🚀 Quick Start (Local Testing)
+## ✨ Key Features
 
-The dev server runs locally with zero setup or external dependencies:
+### 🔍 1. Floor-Optimized Fast Search
+* **High-Visibility Shelf Positioning:** Each search card features a dedicated location badge on the right displaying the **Position Pin `📍` + Shelf Code (`A10`)** and **Zone Name (`Zone A`)** in high-contrast amber styling.
+* **Instant Prefix & Fuzzy Filtering:** Filter in real-time by model reference code, commercial shoe name, shelf ID, or zone.
+* **Multi-Warehouse Scoping:** Toggle between current active warehouse or "Search Everywhere" across regional facilities.
+* **Integrated Barcode Scanner:** Camera-powered Code-128 and EAN-13 scanning with desktop simulation mode for rapid testing.
 
+### 🏢 2. Warehouse Structure & 2D Interactive Map
+* **Clean Folded Accordion:** Hierarchical navigation (`Warehouses` ➔ `Zones / Areas` ➔ `Shelves / Sections`), collapsed by default with 1-tap "Tout déplier / Tout replier" expansion.
+* **2D Layout Canvas (`Plan Carte 2D`):**
+  * Visual floorplan with pinch-to-zoom, pan, and coordinate grid.
+  * Real-time shelf density heatmaps (Empty, Low, Medium, Dense).
+  * Interactive drag-and-drop & directional nudge adjustments.
+  * Shelf Drawer inspection: View all models currently resting on any clicked shelf.
+
+### 🤖 3. Multimodal Gemini AI Scanning & Cycle Counting
+* **Shelf Box Sticker Extraction:** Powered by Google Gemini 2.5 Flash via Firebase AI Logic. Captures shelf photos and extracts `REF`, `COLOR`, and `SIZE` range directly from physical box label stickers.
+* **AI Cycle Counting:** Operators snap a photo of any shelf to automatically count boxes, compare against database placement records, detect discrepancies, and reconcile inventory.
+
+### ⚡ 4. Smart Transfer Engine
+* **Demand-Driven Re-allocation:** Analyzes 30-day search frequencies to recommend moving fast-moving shoe references to primary picking aisles (Zone A).
+* **Shelf Capacity Guard:** Monitors shelf capacity limits and redirects stock to secondary zones when shelves reach maximum thresholds.
+* **15-Second Instant Rollback:** Relocating a shoe model triggers a 15-second "Annuler" banner for accidental floor moves.
+
+### 🔄 5. Dual-Layer Sync & Data Portability
+* **Firebase Firestore Cloud Sync:** Pre-configured default cloud sync with real-time listeners and automatic offline change queue. No complex server setup required.
+* **Direct QR Code Device-to-Device Exchange:** Sync databases between two phones in an offline basement with zero internet using QR pairing.
+* **CSV Bulk Import/Export:** Import thousands of catalog models with column mapping and schema validation.
+
+### 🌐 6. Clean Light Design System & Multilingual
+* **Mobile-First Utility Theme:** Tailored for warehouse lighting with high-contrast text, clear typography (`Inter` & `Cairo`), and distinct semantic badges.
+* **Bilingual Support:** Full French (`fr`) and Arabic (`ar` with native RTL layout).
+
+---
+
+## 🚀 Quick Start (Local Development)
+
+### Prerequisites
+* Node.js 18+
+* npm or pnpm
+
+### Installation
 ```bash
+git clone https://github.com/averroes96/winrah-v3.git
 cd winrah-v3
 npm install
 npm run dev
 ```
 
-Open your browser at **`http://localhost:5173/`** (or access from your mobile phone on the same Wi-Fi using the displayed network IP).
+Open your browser at **`http://localhost:5173/`** or scan the terminal QR code to open the app on any phone connected to the same Wi-Fi network.
 
 ---
 
-## 🧪 Interactive Local Test Guide
+## 📱 Mobile App Builds (Android & iOS)
 
-WINRAH comes equipped with built-in test tools directly accessible from the UI:
+WINRAH is configured with **Capacitor 8** for native performance on Android and iOS devices.
 
-| Feature | How to Test Locally in 1 Click |
-|---|---|
-| **1-Click Demo Data** | Click the **`Démo`** button in the top header. It loads realistic Moroccan warehouse data: Dépôt Central (Casablanca) & Annexe Nord (Tanger), zones, sections, transfers, and duplicate reference models (`HS-21`). |
-| **Search & Disambiguation (FR-4.8)** | In the search bar, type `HS-21`. Notice how it immediately presents both `HS-21 (1)` (Rayon A-01) and `HS-21 (2)` (Rayon A-02) with distinct visual badges and locations. |
-| **Zero-Result Gap Alert (FR-8.3)** | Type a non-existent code like `NK-99`. Switch to the **`Audit & Gaps`** tab to see it flagged in the "Recherches sans résultat" gap detection alert! |
-| **Stock Transfer & Undo (FR-6.6)** | Click **`Transférer`** on any card. Select a destination section (e.g., Rayon B-01) and confirm. Notice the 15-second **`Annuler`** banner enabling instant rollback! |
-| **Offline Simulator Toggle** | Click the **`En ligne` / `Hors-ligne`** button in the header. Make changes while offline; notice the pending counter increment. Toggle back to "En ligne" to observe automatic reconciliation. |
-| **Simulated Conflict Resolution (FR-7.6)** | Go to the **`Synchro`** tab and click **`Créer un conflit test`**. Compare the local device version vs. server version and resolve with 1 click! |
-| **Device-to-Device QR Exchange (FR-7.4)** | In the **`Synchro`** tab, click **`Échange QR Direct (FR-7.4)`** to inspect the pairing QR payload and export/import changesets. |
-| **Barcode Scanner Simulation** | Click the **`Scanner`** button. In addition to device camera support, use the instant simulation buttons (`HS-21`, `HS-88`, etc.) for instant desktop testing. |
-| **CSV Bulk Import & Export** | Go to **`Structure`** > **`Import CSV`**. Insert the sample template, validate column headers, and import models in bulk. |
+### Local Native Builds
+```bash
+# Build web bundle and sync native platforms
+npm run build:mobile
 
----
+# Open in Android Studio
+npm run open:android
 
-## 🗄️ Database Schema & Appwrite Integration
+# Open in Xcode
+npm run open:ios
+```
 
-The cloud backend architecture is configured for **Appwrite Database** (Appwrite Cloud or Self-Hosted Docker), documented in `appwrite/`:
+### Automated CI/CD Workflows
+Pushing a release tag automatically triggers GitHub Actions workflows to build signed binaries:
 
-- **`appwrite/APPWRITE_GUIDE.md`**  
-  Complete step-by-step setup guide for creating the database (`winrah_db`) and collections:
-  - `warehouses`: Central warehouses / hubs
-  - `areas`: Specific zones within warehouses
-  - `sections`: Physical aisles, shelves, and racks
-  - `models`: Shoes catalog with reference codes, size ranges, photos
-  - `model_sections`: Presence-only placement mappings
-  - `transfers`: Immutable audit trail of model relocation logs
-- **`src/lib/appwriteClient.ts`**  
-  Client library handling connection testing, document ID sanitization, dirty queue push, and incremental pull sync.
+```bash
+git tag v1.1.3
+git push origin v1.1.3
+```
+
+* **Android Workflow (`.github/workflows/deploy-android.yml`):** Compiles, signs, and attaches universal `.apk` and `.aab` bundles to the GitHub Release.
+* **iOS Workflow (`.github/workflows/deploy-ios.yml`):** Builds and archives the signed `.ipa` artifact.
+
+Refer to [`DEPLOYMENT_GUIDE.md`](./DEPLOYMENT_GUIDE.md) for signing credentials and secrets setup.
 
 ---
 
 ## 🛠️ Technology Stack
 
-- **Frontend:** React 19 + TypeScript + Vite
-- **Styling:** Vanilla CSS design system (`src/styles/theme.css`) with high-contrast tactile elements for warehouse floor use
-- **Local Persistence:** Native IndexedDB (`winrah_db`) with typed reactive subscriptions
-- **Barcode & QR:** `html5-qrcode` & `qrcode`
-- **Cloud Backend (Optional):** Appwrite Database (Cloud or Self-Hosted) with offline-first bidirectional sync
+| Layer | Technologies |
+|---|---|
+| **Core Framework** | React 19, TypeScript, Vite 8 |
+| **Mobile Runtime** | Capacitor 8 (`@capacitor/android`, `@capacitor/ios`) |
+| **Local Database** | Native IndexedDB (`winrah_db`) with reactive event subscriptions |
+| **Cloud Backend** | Google Cloud Firestore (Firebase SDK v12) |
+| **AI Vision Logic** | Gemini 2.5 Flash via Firebase AI Logic SDK |
+| **Barcode / QR** | `html5-qrcode`, `qrcode` |
+| **Styling** | Vanilla CSS design tokens (`src/styles/theme.css`), Lucide React icons |
+| **CI/CD** | GitHub Actions (`ubuntu-latest` for Android, `macos-15` Xcode 16 for iOS) |
+
+---
+
+## 📄 License
+
+Proprietary — Internal warehouse operations platform. All rights reserved.
