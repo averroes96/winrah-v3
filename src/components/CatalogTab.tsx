@@ -66,7 +66,7 @@ export const CatalogTab: React.FC<CatalogTabProps> = ({
   onOpenSettings,
 }) => {
   const { direction, language, t } = useI18n();
-  const [activeSubTab, setActiveSubTab] = useState<'structure' | 'map' | 'models'>('structure');
+  const [activeSubTab, setActiveSubTab] = useState<'structure' | 'map'>('structure');
   const [modelToTransfer, setModelToTransfer] = useState<ShoeModel | null>(null);
   const [transferFromSectionId, setTransferFromSectionId] = useState<string | undefined>(undefined);
 
@@ -137,7 +137,6 @@ export const CatalogTab: React.FC<CatalogTabProps> = ({
   const [newModelSize, setNewModelSize] = useState('');
   const [newModelPrice, setNewModelPrice] = useState('');
   const [newModelSectionId, setNewModelSectionId] = useState('');
-  const [modelSearchQuery, setModelSearchQuery] = useState('');
 
   // Filtered areas for active warehouse
   const activeAreas = useMemo(() => {
@@ -445,31 +444,6 @@ export const CatalogTab: React.FC<CatalogTabProps> = ({
         >
           <MapPin size={15} />
           <span>Plan Carte 2D</span>
-        </button>
-
-        <button
-          type="button"
-          onClick={() => setActiveSubTab('models')}
-          style={{
-            flex: 1,
-            padding: '0.5rem 0.65rem',
-            fontSize: '0.8rem',
-            fontWeight: 700,
-            borderRadius: 'var(--radius-sm)',
-            border: 'none',
-            cursor: 'pointer',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            gap: '0.35rem',
-            background: activeSubTab === 'models' ? 'var(--accent)' : 'transparent',
-            color: activeSubTab === 'models' ? '#FFFFFF' : 'var(--text-secondary)',
-            transition: 'all 0.15s ease',
-            whiteSpace: 'nowrap',
-          }}
-        >
-          <Layers size={15} />
-          <span>{t('catalog.subtab.models')} ({models.length})</span>
         </button>
       </div>
 
@@ -1027,202 +1001,7 @@ export const CatalogTab: React.FC<CatalogTabProps> = ({
         </div>
       )}
 
-      {/* 3. Models Catalog View */}
-      {activeSubTab === 'models' && (
-        <div className="fade-in">
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.85rem' }}>
-            <h3 style={{ fontSize: '1.05rem', fontWeight: 800 }}>{t('models.title', { count: models.length })}</h3>
-            <div style={{ display: 'flex', gap: '0.4rem', alignItems: 'center' }}>
-              <button
-                type="button"
-                onClick={() => (onOpenQuickAdd ? onOpenQuickAdd() : setIsAddModelOpen(true))}
-                className="btn btn-primary"
-                style={{ padding: '0.45rem 0.85rem', fontSize: '0.8rem' }}
-              >
-                <Plus size={16} />
-                <span>{t('models.add_model')}</span>
-              </button>
-            </div>
-          </div>
 
-          {/* Quick search input */}
-          <div style={{ marginBottom: '1rem' }}>
-            <div
-              style={{
-                position: 'relative',
-                display: 'flex',
-                alignItems: 'center',
-                background: '#FFFFFF',
-                border: '1.5px solid var(--border-default)',
-                borderRadius: 'var(--radius-md)',
-                minHeight: '48px',
-                boxShadow: '0 2px 6px rgba(0, 0, 0, 0.04)',
-                padding: direction === 'rtl' ? '0 0.85rem 0 2.5rem' : '0 2.5rem 0 0.85rem',
-              }}
-            >
-              <Search
-                size={20}
-                style={{
-                  position: 'absolute',
-                  [direction === 'rtl' ? 'right' : 'left']: '0.85rem',
-                  top: '50%',
-                  transform: 'translateY(-50%)',
-                  color: 'var(--accent)',
-                  pointerEvents: 'none',
-                }}
-              />
-              <input
-                type="text"
-                placeholder={t('models.filter_placeholder')}
-                value={modelSearchQuery}
-                onChange={(e) => setModelSearchQuery(e.target.value)}
-                style={{
-                  width: '100%',
-                  height: '46px',
-                  background: 'transparent',
-                  border: 'none',
-                  outline: 'none',
-                  color: 'var(--text-primary)',
-                  fontSize: '0.9375rem',
-                  fontWeight: 500,
-                  padding: 0,
-                }}
-              />
-              {modelSearchQuery && (
-                <button
-                  type="button"
-                  onClick={() => setModelSearchQuery('')}
-                  style={{
-                    position: 'absolute',
-                    [direction === 'rtl' ? 'left' : 'right']: '0.7rem',
-                    top: '50%',
-                    transform: 'translateY(-50%)',
-                    background: '#F1F5F9',
-                    border: 'none',
-                    borderRadius: '50%',
-                    color: 'var(--text-secondary)',
-                    cursor: 'pointer',
-                    width: '26px',
-                    height: '26px',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                  }}
-                >
-                  <X size={15} />
-                </button>
-              )}
-            </div>
-          </div>
-
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-            {models
-              .filter((m) => {
-                if (!modelSearchQuery.trim()) return true;
-                const q = modelSearchQuery.trim().toUpperCase();
-                return (
-                  m.reference_code.toUpperCase().includes(q) ||
-                  (m.name && m.name.toUpperCase().includes(q))
-                );
-              })
-              .map((m) => {
-                const assigned = modelSections
-                  .filter((ms) => ms.model_id === m.id)
-                  .map((ms) => {
-                    const sec = sections.find((s) => s.id === ms.section_id);
-                    const ar = sec ? areas.find((a) => a.id === sec.area_id) : null;
-                    return sec ? { section: sec, area: ar } : null;
-                  })
-                  .filter(Boolean);
-
-                return (
-                  <div
-                    key={m.id}
-                    className="card"
-                    style={{
-                      padding: '0.85rem 1rem',
-                      display: 'flex',
-                      flexDirection: 'column',
-                      gap: '0.6rem',
-                    }}
-                  >
-                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '0.5rem' }}>
-                      <div>
-                        <span className="ref-code" style={{ fontSize: '1.05rem', marginRight: '0.5rem', fontWeight: 800 }}>
-                          {m.reference_code}
-                        </span>
-                        <span style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>
-                          {m.name || t('models.no_desc')}
-                        </span>
-                        {m.size_range && (
-                          <span className="badge badge-neutral" style={{ marginLeft: '0.45rem', fontSize: '0.7rem' }}>
-                            {m.size_range}
-                          </span>
-                        )}
-                      </div>
-
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                        {m.price && (
-                          <span className="badge badge-emerald" style={{ fontSize: '0.75rem', fontWeight: 700 }}>
-                            {m.price} DA
-                          </span>
-                        )}
-                        <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>
-                          {new Date(m.created_at).toLocaleDateString()}
-                        </span>
-                      </div>
-                    </div>
-
-                    {/* Physical Location in Catalog */}
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', flexWrap: 'wrap' }}>
-                      {assigned.length > 0 ? (
-                        assigned.map((loc, idx) => (
-                          <span
-                            key={idx}
-                            style={{
-                              display: 'inline-flex',
-                              alignItems: 'center',
-                              gap: '0.35rem',
-                              padding: '0.25rem 0.6rem',
-                              background: '#FEF3C7',
-                              color: '#92400E',
-                              border: '1px solid #F59E0B',
-                              borderRadius: '6px',
-                              fontSize: '0.8rem',
-                              fontWeight: 700,
-                            }}
-                          >
-                            <MapPin size={13} style={{ color: '#D97706' }} />
-                            <span>
-                              <strong>{loc!.section.name}</strong> {loc!.area ? `(${loc!.area.name})` : ''}
-                            </span>
-                          </span>
-                        ))
-                      ) : (
-                        <span
-                          style={{
-                            display: 'inline-flex',
-                            alignItems: 'center',
-                            gap: '0.3rem',
-                            padding: '0.2rem 0.5rem',
-                            background: '#FEE2E2',
-                            color: '#DC2626',
-                            borderRadius: '6px',
-                            fontSize: '0.75rem',
-                            fontWeight: 600,
-                          }}
-                        >
-                          <AlertCircle size={12} />
-                          <span>{t('search.not_assigned')}</span>
-                        </span>
-                      )}
-                    </div>
-                  </div>
-                );
-              })}
-          </div>
-        </div>
-      )}
 
       {/* Modal: Add Area (FR-2.1) */}
       {isAddAreaOpen && (
