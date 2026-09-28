@@ -698,10 +698,13 @@ export const SearchTab: React.FC<SearchTabProps> = ({
                 style={{
                   padding: '1rem',
                   display: 'flex',
-                  gap: '0.85rem',
-                  alignItems: 'flex-start',
-                  flexWrap: 'wrap',
+                  flexDirection: 'column',
+                  gap: '0.75rem',
                   cursor: 'pointer',
+                  border: '1px solid var(--border-default)',
+                  borderRadius: 'var(--radius-md)',
+                  transition: 'box-shadow 0.15s ease, border-color 0.15s ease',
+                  background: 'var(--bg-card)',
                 }}
                 onClick={() => {
                   flushSearchLog({
@@ -711,168 +714,307 @@ export const SearchTab: React.FC<SearchTabProps> = ({
                   onViewModelDetails(item);
                 }}
               >
-                {/* Photo Thumbnail */}
-                {item.model.photo_url ? (
-                  <img
-                    src={item.model.photo_url}
-                    alt={item.model.reference_code}
-                    style={{
-                      width: '64px',
-                      height: '64px',
-                      borderRadius: 'var(--radius-sm)',
-                      objectFit: 'cover',
-                      flexShrink: 0,
-                      border: '1px solid var(--border-default)',
-                    }}
-                  />
-                ) : (
-                  <div
-                    style={{
-                      width: '64px',
-                      height: '64px',
-                      borderRadius: 'var(--radius-sm)',
-                      background: 'var(--bg-input)',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      flexShrink: 0,
-                      fontSize: '1.5rem',
-                    }}
-                  >
-                    👟
-                  </div>
-                )}
-
-                {/* Main Model Information */}
-                <div style={{ flex: 1, minWidth: '180px' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', flexWrap: 'wrap', marginBottom: '0.3rem' }}>
-                    <h3 className="ref-code" style={{ fontSize: '1.0625rem' }}>
-                      {displayTitle}
-                    </h3>
-
-                    {/* Duplicate Disambiguation Badge (FR-4.8) */}
-                    {item.totalEntriesWithCode > 1 && (
-                      <span
-                        className="badge badge-amber"
-                        title="Plusieurs modèles portent cette même référence (FR-4.7)"
-                      >
-                        <Layers size={11} />
-                        <span>{item.totalEntriesWithCode} fiches</span>
-                      </span>
-                    )}
-
-                    {item.model.size_range && (
-                      <span className="badge badge-neutral">
-                        {item.model.size_range}
-                      </span>
-                    )}
-
-                    {item.model.price && (
-                      <span className="badge badge-emerald">
-                        {item.model.price.toFixed(2)} DA
-                      </span>
-                    )}
-
-                    {item.model.box_color && (
-                      <span
-                        className="badge"
-                        style={{ background: 'rgba(217, 119, 6, 0.1)', color: '#D97706', fontSize: '0.72rem' }}
-                        title={`Couleur de la boîte: ${item.model.box_color}`}
-                      >
-                        <Box size={10} />
-                        <span>{item.model.box_color}</span>
-                      </span>
-                    )}
-                  </div>
-
-                  {item.model.name && (
-                    <p style={{ fontSize: '0.8125rem', color: 'var(--text-secondary)', marginBottom: '0.4rem' }}>
-                      {item.model.name}
-                    </p>
-                  )}
-
-                  {item.model.available_colors && item.model.available_colors.length > 0 && (
-                    <div style={{ display: 'flex', gap: '0.3rem', flexWrap: 'wrap', marginBottom: '0.45rem', alignItems: 'center' }}>
-                      <Palette size={11} style={{ color: 'var(--text-muted)' }} />
-                      {item.model.available_colors.map((c, i) => (
-                        <span
-                          key={i}
-                          style={{
-                            fontSize: '0.68rem',
-                            background: 'var(--bg-input)',
-                            padding: '1px 5px',
-                            borderRadius: '3px',
-                            color: 'var(--text-secondary)',
-                            border: '1px solid var(--border-default)',
-                          }}
-                        >
-                          {c}
-                        </span>
-                      ))}
+                {/* Upper row: Photo & Model metadata */}
+                <div style={{ display: 'flex', gap: '0.85rem', alignItems: 'flex-start', width: '100%' }}>
+                  {item.model.photo_url ? (
+                    <img
+                      src={item.model.photo_url}
+                      alt={item.model.reference_code}
+                      style={{
+                        width: '60px',
+                        height: '60px',
+                        borderRadius: 'var(--radius-sm)',
+                        objectFit: 'cover',
+                        flexShrink: 0,
+                        border: '1px solid var(--border-default)',
+                      }}
+                    />
+                  ) : (
+                    <div
+                      style={{
+                        width: '60px',
+                        height: '60px',
+                        borderRadius: 'var(--radius-sm)',
+                        background: 'var(--bg-input)',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        flexShrink: 0,
+                        fontSize: '1.6rem',
+                      }}
+                    >
+                      👟
                     </div>
                   )}
 
-                  {/* Physical Location Chips */}
-                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.35rem', alignItems: 'center' }}>
-                    {item.sections.length > 0 ? (
-                      item.sections.map((loc) => (
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', flexWrap: 'wrap', marginBottom: '0.25rem' }}>
+                      <h3 className="ref-code" style={{ fontSize: '1.125rem', fontWeight: 800, color: 'var(--text-primary)' }}>
+                        {displayTitle}
+                      </h3>
+
+                      {/* Duplicate Disambiguation Badge (FR-4.8) */}
+                      {item.totalEntriesWithCode > 1 && (
                         <span
-                          key={loc.section.id}
-                          className="badge"
-                          style={{
-                            background: 'var(--accent-light)',
-                            color: 'var(--accent-dark)',
-                            fontSize: '0.75rem',
-                            padding: '0.25rem 0.55rem',
-                          }}
+                          className="badge badge-amber"
+                          title="Plusieurs modèles portent cette même référence (FR-4.7)"
                         >
-                          <MapPin size={11} />
-                          <span>
-                            <strong>{loc.section.name}</strong> ({loc.area.name})
-                            {filterState.isSearchEverywhere && ` — ${loc.warehouse.name.split(' ')[0]}`}
-                          </span>
+                          <Layers size={11} />
+                          <span>{item.totalEntriesWithCode} fiches</span>
                         </span>
-                      ))
-                    ) : (
-                      <span className="badge badge-rose" style={{ fontSize: '0.75rem' }}>
-                        <AlertCircle size={11} />
-                        {t('search.not_assigned')}
-                      </span>
+                      )}
+
+                      {item.model.price && (
+                        <span className="badge badge-emerald" style={{ fontWeight: 700 }}>
+                          {item.model.price.toFixed(2)} DA
+                        </span>
+                      )}
+
+                      {item.model.size_range && (
+                        <span className="badge badge-neutral">
+                          {item.model.size_range}
+                        </span>
+                      )}
+
+                      {item.model.box_color && (
+                        <span
+                          className="badge"
+                          style={{ background: 'rgba(217, 119, 6, 0.1)', color: '#D97706', fontSize: '0.72rem', fontWeight: 600 }}
+                          title={`Couleur de la boîte: ${item.model.box_color}`}
+                        >
+                          <Box size={10} />
+                          <span>{item.model.box_color}</span>
+                        </span>
+                      )}
+                    </div>
+
+                    {item.model.name && (
+                      <p style={{ fontSize: '0.8125rem', color: 'var(--text-secondary)', marginBottom: '0.35rem', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                        {item.model.name}
+                      </p>
+                    )}
+
+                    {item.model.available_colors && item.model.available_colors.length > 0 && (
+                      <div style={{ display: 'flex', gap: '0.3rem', flexWrap: 'wrap', alignItems: 'center' }}>
+                        <Palette size={11} style={{ color: 'var(--text-muted)' }} />
+                        {item.model.available_colors.map((c, i) => (
+                          <span
+                            key={i}
+                            style={{
+                              fontSize: '0.68rem',
+                              background: 'var(--bg-input)',
+                              padding: '1px 5px',
+                              borderRadius: '3px',
+                              color: 'var(--text-secondary)',
+                              border: '1px solid var(--border-default)',
+                            }}
+                          >
+                            {c}
+                          </span>
+                        ))}
+                      </div>
                     )}
                   </div>
                 </div>
 
-                {/* Action Buttons */}
-                <div
-                  style={{
-                    display: 'flex',
-                    flexDirection: 'column',
-                    gap: '0.35rem',
-                    alignSelf: 'center',
-                  }}
-                >
-                  <button
-                    type="button"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      flushSearchLog({
-                        selectedModelId: item.model.id,
-                        fromSectionId: item.sections[0]?.section.id,
-                      });
-                      onInitiateTransfer(item.model, item.sections[0]?.section.id);
-                    }}
-                    className="btn btn-primary"
+                {/* THE HERO LOCATION BANNER - Clearly visible, high-contrast, dominant */}
+                {item.sections.length > 0 ? (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '0.45rem', width: '100%' }}>
+                    {item.sections.map((loc) => {
+                      const shelfName = loc.section.name.toLowerCase().startsWith('rayon') || loc.section.name.startsWith('رف')
+                        ? loc.section.name
+                        : `${t('search.shelf')} ${loc.section.name}`;
+
+                      return (
+                        <div
+                          key={loc.section.id}
+                          style={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'space-between',
+                            gap: '0.65rem',
+                            padding: '0.65rem 0.85rem',
+                            background: 'linear-gradient(135deg, #FFFBEB 0%, #FEF3C7 100%)',
+                            border: '1.5px solid #F59E0B',
+                            borderRadius: '10px',
+                            boxShadow: '0 2px 6px rgba(245, 158, 11, 0.12)',
+                          }}
+                        >
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem', minWidth: 0 }}>
+                            <div
+                              style={{
+                                width: '38px',
+                                height: '38px',
+                                borderRadius: '8px',
+                                background: '#F59E0B',
+                                color: '#FFFFFF',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                flexShrink: 0,
+                                boxShadow: '0 2px 6px rgba(245, 158, 11, 0.25)',
+                              }}
+                            >
+                              <MapPin size={20} strokeWidth={2.5} />
+                            </div>
+
+                            <div style={{ minWidth: 0 }}>
+                              <div
+                                style={{
+                                  fontSize: '0.68rem',
+                                  fontWeight: 800,
+                                  color: '#B45309',
+                                  textTransform: 'uppercase',
+                                  letterSpacing: '0.05em',
+                                  lineHeight: 1.1,
+                                  marginBottom: '2px',
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  gap: '0.35rem',
+                                }}
+                              >
+                                <span>{t('search.location')}</span>
+                                {item.sections.length > 1 && (
+                                  <span
+                                    style={{
+                                      background: 'rgba(217, 119, 6, 0.15)',
+                                      padding: '1px 5px',
+                                      borderRadius: '4px',
+                                      fontSize: '0.62rem',
+                                      fontWeight: 700,
+                                    }}
+                                  >
+                                    Multi-rayons
+                                  </span>
+                                )}
+                              </div>
+
+                              <div
+                                style={{
+                                  fontSize: '1.2rem',
+                                  fontWeight: 900,
+                                  color: '#78350F',
+                                  lineHeight: 1.2,
+                                  letterSpacing: '-0.01em',
+                                  whiteSpace: 'nowrap',
+                                  overflow: 'hidden',
+                                  textOverflow: 'ellipsis',
+                                }}
+                              >
+                                {shelfName}
+                              </div>
+
+                              <div
+                                style={{
+                                  fontSize: '0.78rem',
+                                  fontWeight: 600,
+                                  color: '#92400E',
+                                  marginTop: '1px',
+                                  whiteSpace: 'nowrap',
+                                  overflow: 'hidden',
+                                  textOverflow: 'ellipsis',
+                                }}
+                              >
+                                {loc.area.name}
+                                {filterState.isSearchEverywhere && ` • ${loc.warehouse.name.split(' ')[0]}`}
+                              </div>
+                            </div>
+                          </div>
+
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              flushSearchLog({
+                                selectedModelId: item.model.id,
+                                fromSectionId: loc.section.id,
+                              });
+                              onInitiateTransfer(item.model, loc.section.id);
+                            }}
+                            className="btn btn-primary"
+                            style={{
+                              padding: '0.45rem 0.8rem',
+                              fontSize: '0.8rem',
+                              fontWeight: 700,
+                              gap: '0.35rem',
+                              flexShrink: 0,
+                              boxShadow: '0 2px 6px rgba(245, 158, 11, 0.3)',
+                            }}
+                            title={t('search.actions.transfer')}
+                          >
+                            <ArrowRightLeft size={14} strokeWidth={2.2} />
+                            <span>{t('search.actions.transfer')}</span>
+                          </button>
+                        </div>
+                      );
+                    })}
+                  </div>
+                ) : (
+                  <div
                     style={{
-                      padding: '0.45rem 0.85rem',
-                      fontSize: '0.8rem',
-                      gap: '0.35rem',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                      gap: '0.65rem',
+                      padding: '0.65rem 0.85rem',
+                      background: '#FEF2F2',
+                      border: '1.5px dashed #EF4444',
+                      borderRadius: '10px',
+                      width: '100%',
                     }}
-                    title={t('search.actions.transfer')}
                   >
-                    <ArrowRightLeft size={14} />
-                    <span>{t('search.actions.transfer')}</span>
-                  </button>
-                </div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem', minWidth: 0 }}>
+                      <div
+                        style={{
+                          width: '36px',
+                          height: '36px',
+                          borderRadius: '8px',
+                          background: '#FEE2E2',
+                          color: '#DC2626',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          flexShrink: 0,
+                        }}
+                      >
+                        <AlertCircle size={20} strokeWidth={2.5} />
+                      </div>
+                      <div>
+                        <div style={{ fontWeight: 800, color: '#991B1B', fontSize: '0.9rem', lineHeight: 1.2 }}>
+                          {t('search.not_assigned')}
+                        </div>
+                        <div style={{ fontSize: '0.74rem', color: '#B91C1C', marginTop: '1px' }}>
+                          Ce modèle n'est placé dans aucun rayon
+                        </div>
+                      </div>
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        flushSearchLog({
+                          selectedModelId: item.model.id,
+                        });
+                        onInitiateTransfer(item.model);
+                      }}
+                      className="btn btn-secondary"
+                      style={{
+                        padding: '0.4rem 0.75rem',
+                        fontSize: '0.78rem',
+                        fontWeight: 700,
+                        gap: '0.35rem',
+                        flexShrink: 0,
+                        color: '#DC2626',
+                        borderColor: '#FECACA',
+                        background: '#FFFFFF',
+                      }}
+                    >
+                      <ArrowRightLeft size={13} strokeWidth={2.2} />
+                      <span>Placer</span>
+                    </button>
+                  </div>
+                )}
               </div>
             );
           })}

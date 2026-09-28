@@ -16,6 +16,7 @@ import {
   Palette,
   ClipboardList,
   Sparkles,
+  AlertCircle,
 } from 'lucide-react';
 import {
   DisambiguatedModelResult,
@@ -316,52 +317,142 @@ export const ModelDetailModal: React.FC<ModelDetailModalProps> = ({
 
         {/* Current Physical Placements */}
         <div style={{ marginBottom: '1.25rem' }}>
-          <h4 style={{ fontSize: '0.85rem', fontWeight: 800, color: 'var(--text-muted)', marginBottom: '0.5rem', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+          <h4 style={{ fontSize: '0.82rem', fontWeight: 800, color: 'var(--text-muted)', marginBottom: '0.5rem', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
             {t('modal.detail.current_location')}
           </h4>
 
           {item.sections.length > 0 ? (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-              {item.sections.map((loc) => (
-                <div
-                  key={loc.section.id}
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'space-between',
-                    padding: '0.65rem 0.85rem',
-                    background: 'rgba(9, 13, 22, 0.5)',
-                    border: '1px solid var(--border-subtle)',
-                    borderRadius: 'var(--radius-md)',
-                  }}
-                >
-                  <div>
-                    <div style={{ fontWeight: 700, color: '#fbbf24', fontSize: '0.9rem' }}>
-                      {loc.section.name}
-                    </div>
-                    <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
-                      {loc.area.name} — {loc.warehouse.name}
-                    </div>
-                  </div>
+              {item.sections.map((loc) => {
+                const shelfName = loc.section.name.toLowerCase().startsWith('rayon') || loc.section.name.startsWith('رف')
+                  ? loc.section.name
+                  : `${t('search.shelf')} ${loc.section.name}`;
 
-                  <button
-                    type="button"
-                    onClick={() => {
-                      onClose();
-                      onInitiateTransfer(item.model, loc.section.id);
+                return (
+                  <div
+                    key={loc.section.id}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                      gap: '0.75rem',
+                      padding: '0.75rem 1rem',
+                      background: 'linear-gradient(135deg, #FFFBEB 0%, #FEF3C7 100%)',
+                      border: '1.5px solid #F59E0B',
+                      borderRadius: 'var(--radius-md)',
+                      boxShadow: '0 2px 6px rgba(245, 158, 11, 0.12)',
                     }}
-                    className="btn btn-primary"
-                    style={{ padding: '0.35rem 0.75rem', fontSize: '0.75rem', gap: '0.35rem' }}
                   >
-                    <ArrowRightLeft size={13} />
-                    <span>{t('modal.detail.move_btn')}</span>
-                  </button>
-                </div>
-              ))}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem', minWidth: 0 }}>
+                      <div
+                        style={{
+                          width: '40px',
+                          height: '40px',
+                          borderRadius: '10px',
+                          background: '#F59E0B',
+                          color: '#FFFFFF',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          flexShrink: 0,
+                          boxShadow: '0 2px 6px rgba(245, 158, 11, 0.3)',
+                        }}
+                      >
+                        <MapPin size={22} strokeWidth={2.5} />
+                      </div>
+                      <div style={{ minWidth: 0 }}>
+                        <div style={{ fontWeight: 900, color: '#78350F', fontSize: '1.15rem', lineHeight: 1.2 }}>
+                          {shelfName}
+                        </div>
+                        <div style={{ fontSize: '0.8rem', color: '#92400E', fontWeight: 600, marginTop: '2px' }}>
+                          {loc.area.name} — {loc.warehouse.name}
+                        </div>
+                      </div>
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={() => {
+                        onClose();
+                        onInitiateTransfer(item.model, loc.section.id);
+                      }}
+                      className="btn btn-primary"
+                      style={{
+                        padding: '0.45rem 0.85rem',
+                        fontSize: '0.8rem',
+                        fontWeight: 700,
+                        gap: '0.35rem',
+                        flexShrink: 0,
+                        boxShadow: '0 2px 6px rgba(245, 158, 11, 0.3)',
+                      }}
+                    >
+                      <ArrowRightLeft size={14} strokeWidth={2.2} />
+                      <span>{t('modal.detail.move_btn')}</span>
+                    </button>
+                  </div>
+                );
+              })}
             </div>
           ) : (
-            <div style={{ color: '#fb7185', fontSize: '0.85rem' }}>
-              {t('modal.detail.not_assigned')}
+            <div
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                gap: '0.75rem',
+                padding: '0.75rem 1rem',
+                background: '#FEF2F2',
+                border: '1.5px dashed #EF4444',
+                borderRadius: 'var(--radius-md)',
+              }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem' }}>
+                <div
+                  style={{
+                    width: '36px',
+                    height: '36px',
+                    borderRadius: '8px',
+                    background: '#FEE2E2',
+                    color: '#DC2626',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    flexShrink: 0,
+                  }}
+                >
+                  <AlertCircle size={20} strokeWidth={2.5} />
+                </div>
+                <div>
+                  <div style={{ fontWeight: 800, color: '#991B1B', fontSize: '0.9rem' }}>
+                    {t('modal.detail.not_assigned')}
+                  </div>
+                  <div style={{ fontSize: '0.75rem', color: '#B91C1C' }}>
+                    Ce modèle n'est pas encore assigné à un rayon
+                  </div>
+                </div>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => {
+                  onClose();
+                  onInitiateTransfer(item.model);
+                }}
+                className="btn btn-secondary"
+                style={{
+                  padding: '0.45rem 0.8rem',
+                  fontSize: '0.78rem',
+                  fontWeight: 700,
+                  gap: '0.35rem',
+                  color: '#DC2626',
+                  borderColor: '#FECACA',
+                  background: '#FFFFFF',
+                  flexShrink: 0,
+                }}
+              >
+                <ArrowRightLeft size={13} strokeWidth={2.2} />
+                <span>Assigner</span>
+              </button>
             </div>
           )}
         </div>

@@ -1125,45 +1125,101 @@ export const CatalogTab: React.FC<CatalogTabProps> = ({
                   (m.name && m.name.toUpperCase().includes(q))
                 );
               })
-              .map((m) => (
-              <div
-                key={m.id}
-                className="card"
-                style={{
-                  padding: '0.75rem 1rem',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'space-between',
-                  flexWrap: 'wrap',
-                  gap: '0.5rem',
-                }}
-              >
-                <div>
-                  <span className="ref-code" style={{ fontSize: '1rem', marginRight: '0.5rem' }}>
-                    {m.reference_code}
-                  </span>
-                  <span style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>
-                    {m.name || t('models.no_desc')}
-                  </span>
-                  {m.size_range && (
-                    <span className="badge badge-neutral" style={{ marginLeft: '0.45rem', fontSize: '0.7rem' }}>
-                      {m.size_range}
-                    </span>
-                  )}
-                </div>
+              .map((m) => {
+                const assigned = modelSections
+                  .filter((ms) => ms.model_id === m.id)
+                  .map((ms) => {
+                    const sec = sections.find((s) => s.id === ms.section_id);
+                    const ar = sec ? areas.find((a) => a.id === sec.area_id) : null;
+                    return sec ? { section: sec, area: ar } : null;
+                  })
+                  .filter(Boolean);
 
-                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                  {m.price && (
-                    <span className="badge badge-emerald" style={{ fontSize: '0.75rem' }}>
-                      {m.price} DA
-                    </span>
-                  )}
-                  <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>
-                    {new Date(m.created_at).toLocaleDateString()}
-                  </span>
-                </div>
-              </div>
-            ))}
+                return (
+                  <div
+                    key={m.id}
+                    className="card"
+                    style={{
+                      padding: '0.85rem 1rem',
+                      display: 'flex',
+                      flexDirection: 'column',
+                      gap: '0.6rem',
+                    }}
+                  >
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '0.5rem' }}>
+                      <div>
+                        <span className="ref-code" style={{ fontSize: '1.05rem', marginRight: '0.5rem', fontWeight: 800 }}>
+                          {m.reference_code}
+                        </span>
+                        <span style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>
+                          {m.name || t('models.no_desc')}
+                        </span>
+                        {m.size_range && (
+                          <span className="badge badge-neutral" style={{ marginLeft: '0.45rem', fontSize: '0.7rem' }}>
+                            {m.size_range}
+                          </span>
+                        )}
+                      </div>
+
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                        {m.price && (
+                          <span className="badge badge-emerald" style={{ fontSize: '0.75rem', fontWeight: 700 }}>
+                            {m.price} DA
+                          </span>
+                        )}
+                        <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>
+                          {new Date(m.created_at).toLocaleDateString()}
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* Physical Location in Catalog */}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', flexWrap: 'wrap' }}>
+                      {assigned.length > 0 ? (
+                        assigned.map((loc, idx) => (
+                          <span
+                            key={idx}
+                            style={{
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              gap: '0.35rem',
+                              padding: '0.25rem 0.6rem',
+                              background: '#FEF3C7',
+                              color: '#92400E',
+                              border: '1px solid #F59E0B',
+                              borderRadius: '6px',
+                              fontSize: '0.8rem',
+                              fontWeight: 700,
+                            }}
+                          >
+                            <MapPin size={13} style={{ color: '#D97706' }} />
+                            <span>
+                              <strong>{loc!.section.name}</strong> {loc!.area ? `(${loc!.area.name})` : ''}
+                            </span>
+                          </span>
+                        ))
+                      ) : (
+                        <span
+                          style={{
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: '0.3rem',
+                            padding: '0.2rem 0.5rem',
+                            background: '#FEE2E2',
+                            color: '#DC2626',
+                            borderRadius: '6px',
+                            fontSize: '0.75rem',
+                            fontWeight: 600,
+                          }}
+                        >
+                          <AlertCircle size={12} />
+                          <span>{t('search.not_assigned')}</span>
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
           </div>
         </div>
       )}
