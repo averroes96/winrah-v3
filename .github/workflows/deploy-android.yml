@@ -20,6 +20,11 @@ on:
         required: false
         type: boolean
         default: false
+      upload_to_gdrive:
+        description: 'Upload signed APK to Google Drive'
+        required: false
+        type: boolean
+        default: true
       track:
         description: 'Google Play track'
         required: false
@@ -163,3 +168,33 @@ jobs:
             android/app/build/outputs/apk/release/*.apk
             android/app/build/outputs/bundle/release/*.aab
           generate_release_notes: true
+
+      - name: Setup Python for Google Drive Upload
+        if: ${{ (github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')) || (github.event_name == 'workflow_dispatch' && github.event.inputs.upload_to_gdrive != 'false' && (github.event.inputs.build_type == 'apk' || github.event.inputs.build_type == 'both')) }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install Google Drive Dependencies
+        if: ${{ (github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')) || (github.event_name == 'workflow_dispatch' && github.event.inputs.upload_to_gdrive != 'false' && (github.event.inputs.build_type == 'apk' || github.event.inputs.build_type == 'both')) }}
+        run: pip install --upgrade google-api-python-client google-auth-httplib2 google-auth-oauthlib
+
+      - name: Deploy APK to Google Drive
+        if: ${{ (github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')) || (github.event_name == 'workflow_dispatch' && github.event.inputs.upload_to_gdrive != 'false' && (github.event.inputs.build_type == 'apk' || github.event.inputs.build_type == 'both')) }}
+        env:
+          GDRIVE_SERVICE_ACCOUNT_JSON: ${{ secrets.GDRIVE_SERVICE_ACCOUNT_JSON }}
+          GDRIVE_FOLDER_ID: ${{ secrets.GDRIVE_FOLDER_ID }}
+        run: |
+          VERSION_TAG="${GITHUB_REF_NAME}"
+          if [ -z "$VERSION_TAG" ] || [ "$VERSION_TAG" = "main" ]; then
+            VERSION_TAG="build-${GITHUB_RUN_NUMBER}"
+          fi
+          
+          # Locate release APK
+          APK_FILE=$(find android/app/build/outputs/apk/release -name "*.apk" | head -n 1)
+          if [ -n "$APK_FILE" ]; then
+            echo "Deploying $APK_FILE to Google Drive as WINRAH-${VERSION_TAG}.apk..."
+            python3 scripts/upload-to-gdrive.py "$APK_FILE" "WINRAH-${VERSION_TAG}.apk"
+          else
+            echo "::warning::No release APK found in android/app/build/outputs/apk/release to upload to Google Drive."
+          fi

@@ -107,7 +107,7 @@ git tag v1.1.3
 git push origin v1.1.3
 ```
 
-* **Android Workflow (`.github/workflows/deploy-android.yml`):** Compiles, signs, and attaches universal `.apk` and `.aab` bundles to the GitHub Release.
+* **Android Workflow (`.github/workflows/deploy-android.yml`):** Compiles, signs, and attaches universal `.apk` and `.aab` bundles to GitHub Releases, and automatically deploys the `.apk` directly to Google Drive.
 * **iOS Workflow (`.github/workflows/deploy-ios.yml`):** Builds and archives the signed `.ipa` artifact.
 
 Refer to [`DEPLOYMENT_GUIDE.md`](./DEPLOYMENT_GUIDE.md) for signing credentials and secrets setup.

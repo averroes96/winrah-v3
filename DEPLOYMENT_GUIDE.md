@@ -17,8 +17,12 @@ This workflow runs on **Ubuntu** (`ubuntu-latest`), compiles the web app, syncs 
 | `ANDROID_KEY_ALIAS` | Key alias | Default: `winrah` |
 | `ANDROID_KEY_PASSWORD` | The password for the specific key | Usually same as keystore password |
 | `PLAY_STORE_JSON_KEY` *(Optional)* | Google Cloud Service Account JSON key for Google Play Console | From Google Cloud Console with Google Play Developer API access |
+| `GDRIVE_SERVICE_ACCOUNT_JSON` *(Optional)* | Google Cloud Service Account JSON key for Google Drive upload | Google Cloud Console > IAM & Admin > Service Accounts > Keys > Create JSON Key |
+| `GDRIVE_FOLDER_ID` *(Optional)* | Target Google Drive folder ID for storing APK releases | From the Google Drive URL: `drive.google.com/drive/folders/<FOLDER_ID>` |
 
 > ℹ️ **CI Fallback**: If `ANDROID_KEYSTORE_BASE64` is not configured, the workflow generates a temporary self-signed release keystore so you still get a downloadable, signed `.apk` artifact for test distribution!
+> 
+> 📁 **Google Drive Deployment**: When `GDRIVE_SERVICE_ACCOUNT_JSON` and `GDRIVE_FOLDER_ID` are configured, every signed APK is automatically uploaded to your Google Drive folder (named `WINRAH-vX.X.X.apk`) for instant download by warehouse operators. Make sure to **Share** your Google Drive folder with the Service Account email address as an **Editor**!
 
 ---
 
