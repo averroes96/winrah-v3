@@ -714,7 +714,7 @@ export const SyncTab: React.FC<SyncTabProps> = ({
         </p>
         <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', justifyContent: 'center' }}>
           <span className="badge badge-amber" style={{ fontSize: '0.72rem', padding: '0.2rem 0.55rem' }}>
-            WINRAH v3.0 PWA
+            {t('app.name')} v3.0 PWA
           </span>
           <span className="badge badge-emerald" style={{ fontSize: '0.72rem', padding: '0.2rem 0.55rem' }}>
             100% Offline-First

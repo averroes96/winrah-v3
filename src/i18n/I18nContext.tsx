@@ -33,19 +33,7 @@ export const getInitialLanguage = (): Language => {
       return saved;
     }
 
-    const nav = window.navigator;
-    const deviceLang = (
-      nav.language ||
-      (nav.languages && nav.languages[0]) ||
-      ''
-    ).toLowerCase();
-
-    // If device explicitly has French as primary language, use French
-    if (deviceLang.startsWith('fr')) {
-      return 'fr';
-    }
-
-    // Default to Arabic if device has no language, or is Arabic, or anything else
+    // Default to Arabic ('ar') as default app language
     return 'ar';
   } catch {
     return 'ar';
