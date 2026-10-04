@@ -4,7 +4,7 @@
 // Cloud Sync, CSV Import/Export, and Database Maintenance in one clean place.
 // ============================================================================
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   Settings,
   Warehouse as WarehouseIcon,
@@ -15,31 +15,25 @@ import {
   QrCode,
   CheckCircle2,
   AlertTriangle,
-  Clock,
   Download,
   Upload,
   Trash2,
   Wifi,
   WifiOff,
-  ChevronRight,
-  ShieldCheck,
   FileSpreadsheet,
-  Layers,
   Database,
-  Info,
   Sparkles,
-  Key,
   Eye,
   EyeOff,
   Bot,
 } from 'lucide-react';
 import { syncEngine, SyncEngineStatus } from '../lib/syncEngine';
 import { db } from '../db/indexedDb';
-import { Warehouse, Area, Section, ShoeModel, ModelSection, SyncQueueItem, SyncLog } from '../types';
+import { Warehouse, Area, Section, ShoeModel, ModelSection, SyncQueueItem } from '../types';
 import { useI18n } from '../i18n';
 import { Logo } from './Logo';
 import { exportCatalogToCsv, downloadBlob } from '../lib/csvHelper';
-import { fetchFirebaseDatabase, isFirebaseConfigured, SyncProgressUpdate } from '../lib/firebaseClient';
+import { fetchFirebaseDatabase, SyncProgressUpdate } from '../lib/firebaseClient';
 import { initBaseWarehouse } from '../db/seedData';
 import {
   getGeminiConfig,
@@ -86,42 +80,28 @@ export const SettingsTab: React.FC<SettingsTabProps> = ({
   });
 
   const [conflicts, setConflicts] = useState<SyncQueueItem[]>([]);
-  const [syncLogs, setSyncLogs] = useState<SyncLog[]>([]);
   const [isFetchingServer, setIsFetchingServer] = useState(false);
   const [isPushingServer, setIsPushingServer] = useState(false);
   const [isDeduplicating, setIsDeduplicating] = useState(false);
   const [syncProgress, setSyncProgress] = useState<SyncProgressUpdate | null>(null);
   const [statusFeedback, setStatusFeedback] = useState<{ success: boolean; text: string } | null>(null);
-  const [isAdvancedSyncOpen, setIsAdvancedSyncOpen] = useState(false);
-  const [isMaintenanceConfirmOpen, setIsMaintenanceConfirmOpen] = useState(false);
 
   // Gemini Vision AI settings state
-  const [geminiApiKey, setGeminiApiKey] = useState('');
-  const [geminiModel, setGeminiModel] = useState(DEFAULT_GEMINI_MODEL);
+  const [geminiApiKey, setGeminiApiKey] = useState(() => getGeminiConfig()?.apiKey || '');
+  const [geminiModel, setGeminiModel] = useState(() => getGeminiConfig()?.model || DEFAULT_GEMINI_MODEL);
   const [showApiKey, setShowApiKey] = useState(false);
   const [isTestingGemini, setIsTestingGemini] = useState(false);
   const [geminiTestResult, setGeminiTestResult] = useState<{ success: boolean; message: string } | null>(null);
 
-  useEffect(() => {
-    const cfg = getGeminiConfig();
-    if (cfg) {
-      setGeminiApiKey(cfg.apiKey);
-      setGeminiModel(cfg.model);
-    }
+  const loadSyncData = useCallback(async () => {
+    const q = await db.getAll<SyncQueueItem>('sync_queue');
+    setConflicts(q.filter((c) => c.status === 'pending'));
   }, []);
 
   useEffect(() => {
     loadSyncData();
     return syncEngine.subscribe(setSyncStatus);
-  }, []);
-
-  const loadSyncData = async () => {
-    const q = await db.getAll<SyncQueueItem>('sync_queue');
-    setConflicts(q.filter((c) => c.status === 'pending'));
-
-    const logs = await db.getAll<SyncLog>('sync_logs');
-    setSyncLogs(logs.sort((a, b) => new Date(b.started_at).getTime() - new Date(a.started_at).getTime()));
-  };
+  }, [loadSyncData]);
 
   const handleToggleOffline = () => {
     syncEngine.setSimulatedOffline(syncStatus.isOnline);
@@ -135,12 +115,12 @@ export const SettingsTab: React.FC<SettingsTabProps> = ({
       if (res.pushed === 0) {
         setStatusFeedback({
           success: true,
-          text: 'Synchronisation terminée : tout est à jour.',
+          text: t('settings.feedback.sync_up_to_date'),
         });
       } else {
         setStatusFeedback({
           success: true,
-          text: `Synchronisation réussie ! ${res.pushed} modification(s) locale(s) envoyée(s).`,
+          text: t('settings.feedback.sync_success', { count: res.pushed }),
         });
       }
       await loadSyncData();
@@ -148,7 +128,7 @@ export const SettingsTab: React.FC<SettingsTabProps> = ({
     } catch (err: any) {
       setStatusFeedback({
         success: false,
-        text: `Erreur de synchronisation : ${err.message || err}`,
+        text: t('settings.feedback.sync_error', { message: err.message || String(err) }),
       });
     } finally {
       setSyncProgress(null);
@@ -162,14 +142,14 @@ export const SettingsTab: React.FC<SettingsTabProps> = ({
       const res = await fetchFirebaseDatabase(true, (p) => setSyncProgress(p));
       setStatusFeedback({
         success: true,
-        text: `Base locale réinitialisée et base serveur (Firebase Firestore) téléchargée avec succès (${res.total} enregistrements chargés).`,
+        text: t('settings.feedback.pull_success', { count: res.total }),
       });
       await loadSyncData();
       onRefreshData();
     } catch (err: any) {
       setStatusFeedback({
         success: false,
-        text: `Erreur lors du téléchargement : ${err.message || err}`,
+        text: t('settings.feedback.pull_error', { message: err.message || String(err) }),
       });
     } finally {
       setIsFetchingServer(false);
@@ -185,14 +165,14 @@ export const SettingsTab: React.FC<SettingsTabProps> = ({
       await db.deduplicateLocalDatabase();
       setStatusFeedback({
         success: true,
-        text: `Base locale poussée vers le serveur avec succès (${res.pushed} enregistrements).`,
+        text: t('settings.feedback.push_success', { count: res.pushed }),
       });
       await loadSyncData();
       onRefreshData();
     } catch (err: any) {
       setStatusFeedback({
         success: false,
-        text: `Erreur lors de l'envoi vers le serveur : ${err.message || err}`,
+        text: t('settings.feedback.push_error', { message: err.message || String(err) }),
       });
     } finally {
       setIsPushingServer(false);
@@ -214,19 +194,19 @@ export const SettingsTab: React.FC<SettingsTabProps> = ({
       if (totalRemoved === 0) {
         setStatusFeedback({
           success: true,
-          text: 'Aucun doublon trouvé. La base de données est saine.',
+          text: t('settings.feedback.dedup_none'),
         });
       } else {
         setStatusFeedback({
           success: true,
-          text: `Nettoyage réussi : ${totalRemoved} doublon(s) supprimé(s).`,
+          text: t('settings.feedback.dedup_success', { count: totalRemoved }),
         });
         onRefreshData();
       }
     } catch (err: any) {
       setStatusFeedback({
         success: false,
-        text: `Erreur de nettoyage des doublons : ${err.message || err}`,
+        text: t('settings.feedback.dedup_error', { message: err.message || String(err) }),
       });
     } finally {
       setIsDeduplicating(false);
@@ -234,20 +214,20 @@ export const SettingsTab: React.FC<SettingsTabProps> = ({
   };
 
   const handleClearLocalDb = async () => {
-    if (window.confirm('Supprimer l’intégralité des données locales ?\nCette action va vider IndexedDB et réinitialiser un entrepôt BASE propre.')) {
+    if (window.confirm(t('settings.danger.clear_confirm'))) {
       setStatusFeedback(null);
       try {
         await initBaseWarehouse();
         setStatusFeedback({
           success: true,
-          text: 'Base de données locale vidée avec succès. Entrepôt BASE vierge réinitialisé.',
+          text: t('settings.feedback.clear_success'),
         });
         await loadSyncData();
         onRefreshData();
       } catch (err: any) {
         setStatusFeedback({
           success: false,
-          text: `Erreur lors du nettoyage : ${err.message || err}`,
+          text: t('settings.feedback.clear_error', { message: err.message || String(err) }),
         });
       }
     }
@@ -259,12 +239,12 @@ export const SettingsTab: React.FC<SettingsTabProps> = ({
     downloadBlob(csvData, filename, 'text/csv;charset=utf-8;');
     setStatusFeedback({
       success: true,
-      text: `Catalogue exporté (${models.length} modèles). Fichier téléchargé : ${filename}`,
+      text: t('settings.feedback.export_success', { count: models.length, filename }),
     });
   };
 
   return (
-    <div className="fade-in" style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+    <div className="fade-in" dir={direction} style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
       {/* Page Title */}
       <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', marginBottom: '0.25rem' }}>
         <div
@@ -283,10 +263,10 @@ export const SettingsTab: React.FC<SettingsTabProps> = ({
         </div>
         <div>
           <h2 style={{ fontSize: '1.15rem', fontWeight: 800, margin: 0, color: 'var(--text-primary)' }}>
-            Paramètres & Outils
+            {t('settings.title')}
           </h2>
           <span style={{ fontSize: '0.78rem', color: 'var(--text-secondary)' }}>
-            Configuration générale, synchronisation et gestion des données
+            {t('settings.subtitle')}
           </span>
         </div>
       </div>
@@ -368,13 +348,13 @@ export const SettingsTab: React.FC<SettingsTabProps> = ({
             </div>
             <div>
               <div style={{ fontSize: '0.72rem', fontWeight: 700, color: 'var(--accent-dark)', textTransform: 'uppercase' }}>
-                Entrepôt Actif
+                {t('settings.warehouse.title')}
               </div>
               <div style={{ fontSize: '1.05rem', fontWeight: 800, color: 'var(--text-primary)' }}>
-                {activeWarehouse ? activeWarehouse.name : 'Aucun entrepôt'}
+                {activeWarehouse ? activeWarehouse.name : t('settings.warehouse.none')}
               </div>
               <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
-                {warehouses.length} entrepôt(s) disponible(s) • {models.length} modèles
+                {t('settings.warehouse.stats', { warehouses: warehouses.length, models: models.length })}
               </span>
             </div>
           </div>
@@ -385,7 +365,7 @@ export const SettingsTab: React.FC<SettingsTabProps> = ({
             className="btn btn-secondary"
             style={{ fontSize: '0.8rem', padding: '0.45rem 0.85rem' }}
           >
-            Changer
+            {t('settings.warehouse.change')}
           </button>
         </div>
       </div>
@@ -395,7 +375,7 @@ export const SettingsTab: React.FC<SettingsTabProps> = ({
         <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.75rem' }}>
           <Globe size={18} style={{ color: 'var(--accent)' }} />
           <h3 style={{ fontSize: '0.92rem', fontWeight: 800, margin: 0 }}>
-            Langue de l'application / لغة التطبيق
+            {t('settings.lang.title')}
           </h3>
         </div>
 
@@ -419,7 +399,7 @@ export const SettingsTab: React.FC<SettingsTabProps> = ({
               fontFamily: 'var(--font-arabic)',
             }}
           >
-            <span>العربية (Par défaut)</span>
+            <span>{t('settings.lang.ar')}</span>
             {language === 'ar' && <CheckCircle2 size={16} />}
           </button>
 
@@ -441,7 +421,7 @@ export const SettingsTab: React.FC<SettingsTabProps> = ({
               color: language === 'fr' ? 'var(--accent-dark)' : 'var(--text-primary)',
             }}
           >
-            <span>Français</span>
+            <span>{t('settings.lang.fr')}</span>
             {language === 'fr' && <CheckCircle2 size={16} />}
           </button>
         </div>
@@ -466,11 +446,11 @@ export const SettingsTab: React.FC<SettingsTabProps> = ({
               <Database size={20} />
             </div>
             <div>
-              <div style={{ fontSize: '0.98rem', fontWeight: 800 }}>Synchronisation Cloud</div>
+              <div style={{ fontSize: '0.98rem', fontWeight: 800 }}>{t('settings.sync.title')}</div>
               <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
                 {syncStatus.lastSyncedAt
-                  ? `Dernière synchro : ${new Date(syncStatus.lastSyncedAt).toLocaleTimeString()}`
-                  : 'Dernière synchro : Jamais'}
+                  ? t('settings.sync.last_synced', { time: new Date(syncStatus.lastSyncedAt).toLocaleTimeString() })
+                  : t('settings.sync.never')}
               </div>
             </div>
           </div>
@@ -494,7 +474,7 @@ export const SettingsTab: React.FC<SettingsTabProps> = ({
             }}
           >
             {syncStatus.isOnline ? <Wifi size={12} /> : <WifiOff size={12} />}
-            <span>{syncStatus.isOnline ? 'En ligne' : 'Hors ligne'}</span>
+            <span>{syncStatus.isOnline ? t('settings.sync.online') : t('settings.sync.offline')}</span>
           </button>
         </div>
 
@@ -510,7 +490,7 @@ export const SettingsTab: React.FC<SettingsTabProps> = ({
               fontWeight: 700,
             }}
           >
-            {syncStatus.pendingChangesCount} modification(s) en attente
+            {t('settings.sync.pending_changes', { count: syncStatus.pendingChangesCount })}
           </span>
 
           {conflicts.length > 0 && (
@@ -524,7 +504,7 @@ export const SettingsTab: React.FC<SettingsTabProps> = ({
                 fontWeight: 700,
               }}
             >
-              {conflicts.length} conflit(s)
+              {t('settings.sync.conflicts', { count: conflicts.length })}
             </span>
           )}
         </div>
@@ -538,7 +518,7 @@ export const SettingsTab: React.FC<SettingsTabProps> = ({
           style={{ width: '100%', padding: '0.75rem', fontSize: '0.88rem', fontWeight: 700, marginBottom: '0.75rem' }}
         >
           <RefreshCw size={16} className={syncStatus.isSyncing ? 'animate-spin' : ''} />
-          <span>{syncStatus.isSyncing ? 'Synchronisation en cours...' : 'Synchroniser maintenant'}</span>
+          <span>{syncStatus.isSyncing ? t('settings.sync.syncing') : t('settings.sync.sync_now')}</span>
         </button>
 
         {/* Collapsible Secondary Actions */}
@@ -551,7 +531,7 @@ export const SettingsTab: React.FC<SettingsTabProps> = ({
             style={{ fontSize: '0.78rem', padding: '0.55rem', gap: '0.4rem', justifyContent: 'center' }}
           >
             <CloudDownload size={15} className={isFetchingServer ? 'animate-spin' : ''} />
-            <span>Télécharger serveur</span>
+            <span>{t('settings.sync.pull_server')}</span>
           </button>
 
           <button
@@ -562,7 +542,7 @@ export const SettingsTab: React.FC<SettingsTabProps> = ({
             style={{ fontSize: '0.78rem', padding: '0.55rem', gap: '0.4rem', justifyContent: 'center' }}
           >
             <CloudUpload size={15} className={isPushingServer ? 'animate-spin' : ''} />
-            <span>Envoyer au serveur</span>
+            <span>{t('settings.sync.push_server')}</span>
           </button>
 
           <button
@@ -572,7 +552,7 @@ export const SettingsTab: React.FC<SettingsTabProps> = ({
             style={{ fontSize: '0.78rem', padding: '0.55rem', gap: '0.4rem', justifyContent: 'center' }}
           >
             <QrCode size={15} />
-            <span>Échange QR direct</span>
+            <span>{t('settings.sync.qr_direct')}</span>
           </button>
 
           <button
@@ -583,7 +563,7 @@ export const SettingsTab: React.FC<SettingsTabProps> = ({
             style={{ fontSize: '0.78rem', padding: '0.55rem', gap: '0.4rem', justifyContent: 'center' }}
           >
             <CheckCircle2 size={15} className={isDeduplicating ? 'animate-spin' : ''} />
-            <span>Nettoyer doublons</span>
+            <span>{t('settings.sync.deduplicate')}</span>
           </button>
         </div>
       </div>
@@ -609,12 +589,10 @@ export const SettingsTab: React.FC<SettingsTabProps> = ({
             </div>
             <div>
               <h3 style={{ fontSize: '0.95rem', fontWeight: 800, margin: 0 }}>
-                {language === 'ar' ? 'الذكاء الاصطناعي (Gemini Vision)' : 'Intelligence Artificielle (Gemini Vision)'}
+                {t('settings.ai.title')}
               </h3>
               <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>
-                {language === 'ar'
-                  ? 'التعرف على ملصقات العلب وتعداد المخزون تلقائياً'
-                  : 'Analyse visuelle des étiquettes et inventaire automatique'}
+                {t('settings.ai.subtitle')}
               </span>
             </div>
           </div>
@@ -629,20 +607,18 @@ export const SettingsTab: React.FC<SettingsTabProps> = ({
               color: geminiApiKey.trim() ? '#10B981' : 'var(--danger)',
             }}
           >
-            {geminiApiKey.trim() ? (language === 'ar' ? 'مفعل' : 'Actif') : (language === 'ar' ? 'غير مهيأ' : 'Non configuré')}
+            {geminiApiKey.trim() ? t('settings.ai.status_active') : t('settings.ai.status_unconfigured')}
           </span>
         </div>
 
         <p style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', marginBottom: '0.85rem', lineHeight: 1.45 }}>
-          {language === 'ar'
-            ? 'يقوم النموذج بفحص صور الرفوف وتحديد ملصقات العلب (REF | COLOR | SIZE) لحساب الأزواج المتوفرة وإدخال الموديلات.'
-            : 'Gemini Vision analyse les photos des étagères et détecte les étiquettes des boîtes (REF | COLOR | SIZE) pour dénombrer le stock.'}
+          {t('settings.ai.description')}
         </p>
 
         {/* API Key Input */}
         <div style={{ marginBottom: '0.75rem' }}>
           <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, marginBottom: '0.3rem', color: 'var(--text-primary)' }}>
-            {language === 'ar' ? 'مفتاح Gemini API (Google AI Studio)' : 'Clé API Google Gemini'}
+            {t('settings.ai.api_key_label')}
           </label>
           <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
             <input
@@ -687,7 +663,7 @@ export const SettingsTab: React.FC<SettingsTabProps> = ({
         {/* Model Selection */}
         <div style={{ marginBottom: '0.85rem' }}>
           <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, marginBottom: '0.3rem', color: 'var(--text-primary)' }}>
-            {language === 'ar' ? 'النموذج المستخدم' : 'Modèle de vision'}
+            {t('settings.ai.model_label')}
           </label>
           <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
             <select
@@ -709,13 +685,13 @@ export const SettingsTab: React.FC<SettingsTabProps> = ({
                 color: 'var(--text-primary)',
               }}
             >
-              <option value="gemini-3.8-flash">Gemini 3.8 Flash (Recommandé - Stable)</option>
-              <option value="gemini-3.5-flash-lite">Gemini 3.5 Flash-Lite (Ultra rapide & Léger)</option>
+              <option value="gemini-3.8-flash">{t('settings.ai.model_recommended')}</option>
+              <option value="gemini-3.5-flash-lite">{t('settings.ai.model_lite')}</option>
               <option value="gemini-3.7-flash">Gemini 3.7 Flash</option>
               <option value="gemini-3.5-flash">Gemini 3.5 Flash</option>
-              <option value="gemini-3.1-pro-preview">Gemini 3.1 Pro (Preview - Haute intelligence)</option>
-              <option value="gemini-2.5-flash">Gemini 2.5 Flash (Accès restreint)</option>
-              <option value="custom">Personnalisé / Autre modèle...</option>
+              <option value="gemini-3.1-pro-preview">{t('settings.ai.model_pro')}</option>
+              <option value="gemini-2.5-flash">{t('settings.ai.model_restricted')}</option>
+              <option value="custom">{t('settings.ai.model_custom')}</option>
             </select>
 
             {(!['gemini-3.8-flash', 'gemini-3.5-flash-lite', 'gemini-3.7-flash', 'gemini-3.5-flash', 'gemini-3.1-pro-preview', 'gemini-2.5-flash'].includes(geminiModel) || geminiModel === 'custom') && (
@@ -726,7 +702,7 @@ export const SettingsTab: React.FC<SettingsTabProps> = ({
                   setGeminiModel(e.target.value.trim());
                   setGeminiTestResult(null);
                 }}
-                placeholder="ex: gemini-3.8-flash"
+                placeholder={t('settings.ai.custom_placeholder')}
                 style={{
                   width: '100%',
                   padding: '0.45rem 0.65rem',
@@ -771,7 +747,7 @@ export const SettingsTab: React.FC<SettingsTabProps> = ({
             onClick={async () => {
               if (!geminiApiKey.trim()) {
                 clearGeminiConfig();
-                setGeminiTestResult({ success: true, message: 'Clé API supprimée.' });
+                setGeminiTestResult({ success: true, message: t('settings.ai.key_cleared') });
                 return;
               }
               setIsTestingGemini(true);
@@ -796,7 +772,7 @@ export const SettingsTab: React.FC<SettingsTabProps> = ({
             }}
           >
             <Sparkles size={14} className={isTestingGemini ? 'animate-spin' : ''} />
-            <span>{isTestingGemini ? (language === 'ar' ? 'جاري الاختبار...' : 'Test en cours...') : (language === 'ar' ? 'حفظ واختبار الاتصال' : 'Sauvegarder & Tester')}</span>
+            <span>{isTestingGemini ? t('settings.ai.testing') : t('settings.ai.save_test')}</span>
           </button>
 
           <a
@@ -806,7 +782,7 @@ export const SettingsTab: React.FC<SettingsTabProps> = ({
             className="btn btn-secondary"
             style={{ fontSize: '0.78rem', padding: '0.55rem 0.75rem', textDecoration: 'none' }}
           >
-            {language === 'ar' ? 'الحصول على مفتاح مجاني' : 'Obtenir clé gratuite (Google AI)'}
+            {t('settings.ai.get_free_key')}
           </a>
         </div>
       </div>
@@ -816,11 +792,11 @@ export const SettingsTab: React.FC<SettingsTabProps> = ({
         <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.4rem' }}>
           <FileSpreadsheet size={18} style={{ color: 'var(--accent)' }} />
           <h3 style={{ fontSize: '0.95rem', fontWeight: 800, margin: 0 }}>
-            Données & Catalogue (CSV)
+            {t('settings.data.title')}
           </h3>
         </div>
         <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: '0.85rem' }}>
-          Sauvegardez votre catalogue sur votre téléphone ou importez un fichier CSV (compatible v2 et v3).
+          {t('settings.data.subtitle')}
         </p>
 
         {/* Highlighted WINRAH v2 database 1-click import */}
@@ -842,10 +818,10 @@ export const SettingsTab: React.FC<SettingsTabProps> = ({
             <Sparkles size={18} style={{ color: 'var(--accent)' }} />
             <div>
               <div style={{ fontWeight: 800, fontSize: '0.82rem', color: 'var(--text-primary)' }}>
-                Base WINRAH v2 d'origine
+                {t('settings.data.v2_title')}
               </div>
               <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>
-                1 484 articles • 101 rayons (A1-D27)
+                {t('settings.data.v2_stats')}
               </div>
             </div>
           </div>
@@ -857,7 +833,7 @@ export const SettingsTab: React.FC<SettingsTabProps> = ({
             style={{ padding: '0.45rem 0.85rem', fontSize: '0.78rem', gap: '0.35rem' }}
           >
             <Database size={14} />
-            <span>Charger Base v2</span>
+            <span>{t('settings.data.load_v2')}</span>
           </button>
         </div>
 
@@ -869,7 +845,7 @@ export const SettingsTab: React.FC<SettingsTabProps> = ({
             style={{ padding: '0.65rem', fontSize: '0.82rem', gap: '0.45rem', justifyContent: 'center' }}
           >
             <Download size={16} style={{ color: 'var(--accent)' }} />
-            <span>Exporter CSV</span>
+            <span>{t('settings.data.export_csv')}</span>
           </button>
 
           <button
@@ -879,7 +855,7 @@ export const SettingsTab: React.FC<SettingsTabProps> = ({
             style={{ padding: '0.65rem', fontSize: '0.82rem', gap: '0.45rem', justifyContent: 'center' }}
           >
             <Upload size={16} style={{ color: 'var(--accent)' }} />
-            <span>Importer CSV</span>
+            <span>{t('settings.data.import_csv')}</span>
           </button>
         </div>
       </div>
@@ -898,10 +874,10 @@ export const SettingsTab: React.FC<SettingsTabProps> = ({
             <Trash2 size={18} style={{ color: 'var(--danger)' }} />
             <div>
               <div style={{ fontWeight: 700, fontSize: '0.88rem', color: 'var(--danger)' }}>
-                Zone de maintenance locale
+                {t('settings.danger.title')}
               </div>
               <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>
-                Réinitialise la base locale de cet appareil
+                {t('settings.danger.desc')}
               </div>
             </div>
           </div>
@@ -919,7 +895,7 @@ export const SettingsTab: React.FC<SettingsTabProps> = ({
               fontWeight: 700,
             }}
           >
-            Vider la base
+            {t('settings.danger.clear_btn')}
           </button>
         </div>
       </div>
@@ -935,8 +911,8 @@ export const SettingsTab: React.FC<SettingsTabProps> = ({
       >
         <Logo size={42} showText={true} showTagline={false} />
         <div style={{ display: 'flex', gap: '0.4rem', justifyContent: 'center', marginTop: '0.65rem', flexWrap: 'wrap' }}>
-          <span className="badge badge-amber" style={{ fontSize: '0.7rem' }}>WINRAH v3.0</span>
-          <span className="badge badge-emerald" style={{ fontSize: '0.7rem' }}>100% Hors-ligne</span>
+          <span className="badge badge-amber" style={{ fontSize: '0.7rem' }}>{t('app.name')} v3.0</span>
+          <span className="badge badge-emerald" style={{ fontSize: '0.7rem' }}>{t('settings.footer.offline_badge')}</span>
           <span className="badge badge-neutral" style={{ fontSize: '0.7rem' }}>IndexedDB</span>
         </div>
       </div>

@@ -309,7 +309,6 @@ export function App() {
             warehouses={warehouses}
             activeWarehouse={activeWarehouse}
             transfers={transfers}
-            searchLogs={searchLogs}
             onRefreshData={refreshData}
           />
         )}

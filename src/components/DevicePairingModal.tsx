@@ -21,6 +21,7 @@ import { syncEngine } from '../lib/syncEngine';
 import { DeviceChangeset, PairingQrPayload } from '../types';
 import { downloadBlob } from '../lib/csvHelper';
 import confetti from 'canvas-confetti';
+import { useI18n } from '../i18n';
 
 interface DevicePairingModalProps {
   isOpen: boolean;
@@ -35,6 +36,7 @@ export const DevicePairingModal: React.FC<DevicePairingModalProps> = ({
   onClose,
   onOpenScanner,
 }) => {
+  const { direction, t } = useI18n();
   const [activeTab, setActiveTab] = useState<'send' | 'receive'>('send');
   const [qrDataUrl, setQrDataUrl] = useState<string>('');
   const [changesetJson, setChangesetJson] = useState<string>('');
@@ -101,15 +103,15 @@ export const DevicePairingModal: React.FC<DevicePairingModalProps> = ({
       setImportStatus(null);
       const parsed: DeviceChangeset = JSON.parse(jsonString);
       if (!parsed.tables) {
-        throw new Error('Format de données invalide (clé "tables" absente).');
+        throw new Error(t('pairing.error_invalid'));
       }
 
-      const res = await syncEngine.importChangeset(parsed);
-      setImportStatus(`Succès : Anciennes données et hubs supprimés. ${res.imported} enregistrements intégrés !`);
+      await syncEngine.importChangeset(parsed);
+      setImportStatus(t('pairing.success'));
       confetti({ particleCount: 50, spread: 60 });
       onSuccess();
     } catch (err: any) {
-      setImportStatus(`Erreur d'import : ${err.message}`);
+      setImportStatus(`${err.message || t('pairing.error_invalid')}`);
     }
   };
 
@@ -149,6 +151,7 @@ export const DevicePairingModal: React.FC<DevicePairingModalProps> = ({
     >
       <div
         className="card fade-in"
+        dir={direction}
         style={{
           width: '100%',
           maxWidth: '520px',
@@ -169,12 +172,14 @@ export const DevicePairingModal: React.FC<DevicePairingModalProps> = ({
           style={{
             position: 'absolute',
             top: '1rem',
-            right: '1rem',
+            right: direction === 'rtl' ? 'auto' : '1rem',
+            left: direction === 'rtl' ? '1rem' : 'auto',
             background: 'transparent',
             border: 'none',
             color: 'var(--text-muted)',
             cursor: 'pointer',
           }}
+          aria-label={t('common.close')}
         >
           <X size={22} />
         </button>
@@ -196,10 +201,10 @@ export const DevicePairingModal: React.FC<DevicePairingModalProps> = ({
           </div>
           <div>
             <h2 style={{ fontSize: '1.15rem', fontWeight: 800 }}>
-              Transfert Données Appareil-à-Appareil
+              {t('pairing.title')}
             </h2>
             <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
-              Partager ou recevoir des données sans connexion internet
+              {t('pairing.subtitle')}
             </p>
           </div>
         </div>
@@ -212,7 +217,7 @@ export const DevicePairingModal: React.FC<DevicePairingModalProps> = ({
             className={`btn ${activeTab === 'send' ? 'btn-indigo' : 'btn-secondary'}`}
             style={{ flex: 1, padding: '0.55rem', fontSize: '0.85rem' }}
           >
-            1. Émettre / Partager
+            {t('pairing.tab_send')}
           </button>
           <button
             type="button"
@@ -220,7 +225,7 @@ export const DevicePairingModal: React.FC<DevicePairingModalProps> = ({
             className={`btn ${activeTab === 'receive' ? 'btn-indigo' : 'btn-secondary'}`}
             style={{ flex: 1, padding: '0.55rem', fontSize: '0.85rem' }}
           >
-            2. Réceptionner / Importer
+            {t('pairing.tab_receive')}
           </button>
         </div>
 
@@ -228,7 +233,7 @@ export const DevicePairingModal: React.FC<DevicePairingModalProps> = ({
         {activeTab === 'send' && (
           <div className="fade-in" style={{ textAlign: 'center' }}>
             <p style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', marginBottom: '0.75rem' }}>
-              Faites scanner ce QR Code par l'autre appareil, ou transférez le fichier JSON.
+              {t('pairing.send_desc')}
             </p>
 
             {isQrFullData ? (
@@ -244,7 +249,7 @@ export const DevicePairingModal: React.FC<DevicePairingModalProps> = ({
                   marginBottom: '0.75rem',
                 }}
               >
-                ✓ Données complètes encodées dans le QR Code
+                {t('pairing.qr_full_data')}
               </div>
             ) : (
               <div
@@ -259,7 +264,7 @@ export const DevicePairingModal: React.FC<DevicePairingModalProps> = ({
                   marginBottom: '0.75rem',
                 }}
               >
-                Volume important : téléchargez le fichier JSON ci-dessous
+                {t('pairing.download_json')}
               </div>
             )}
 
@@ -282,7 +287,7 @@ export const DevicePairingModal: React.FC<DevicePairingModalProps> = ({
                 />
               </div>
             ) : (
-              <div style={{ padding: '2rem', color: 'var(--text-muted)' }}>Génération du QR...</div>
+              <div style={{ padding: '2rem', color: 'var(--text-muted)' }}>{t('common.loading')}</div>
             )}
 
             <div style={{ display: 'flex', gap: '0.5rem', justifyContent: 'center' }}>
@@ -293,7 +298,7 @@ export const DevicePairingModal: React.FC<DevicePairingModalProps> = ({
                 style={{ fontSize: '0.82rem', gap: '0.4rem' }}
               >
                 {isCopied ? <Check size={16} style={{ color: '#34d399' }} /> : <Copy size={16} />}
-                <span>{isCopied ? 'Copié !' : 'Copier données'}</span>
+                <span>{isCopied ? t('pairing.copied') : t('pairing.copy_json')}</span>
               </button>
 
               <button
@@ -303,7 +308,7 @@ export const DevicePairingModal: React.FC<DevicePairingModalProps> = ({
                 style={{ fontSize: '0.82rem', gap: '0.4rem' }}
               >
                 <Download size={16} />
-                <span>Télécharger fichier (.json)</span>
+                <span>{t('pairing.download_json')}</span>
               </button>
             </div>
           </div>
@@ -329,8 +334,7 @@ export const DevicePairingModal: React.FC<DevicePairingModalProps> = ({
             >
               <AlertTriangle size={18} style={{ flexShrink: 0, marginTop: '2px' }} />
               <div>
-                <strong>Attention :</strong> L'importation supprime l'intégralité du contenu local actuel
-                (y compris tous les anciens entrepôts/hubs) pour charger les nouvelles données.
+                <strong>{t('common.error')}:</strong> {t('pairing.warning')}
               </div>
             </div>
 
@@ -344,7 +348,7 @@ export const DevicePairingModal: React.FC<DevicePairingModalProps> = ({
                   style={{ gap: '0.45rem', fontSize: '0.82rem', padding: '0.65rem' }}
                 >
                   <Camera size={16} />
-                  <span>Scanner QR Code</span>
+                  <span>{t('pairing.scan_camera')}</span>
                 </button>
               )}
 
@@ -360,7 +364,7 @@ export const DevicePairingModal: React.FC<DevicePairingModalProps> = ({
                 }}
               >
                 <FileCode size={16} />
-                <span>Charger fichier JSON</span>
+                <span>{t('pairing.import_file')}</span>
               </button>
               <input
                 ref={fileInputRef}
@@ -372,14 +376,14 @@ export const DevicePairingModal: React.FC<DevicePairingModalProps> = ({
             </div>
 
             <p style={{ fontSize: '0.78rem', color: 'var(--text-secondary)', marginBottom: '0.5rem' }}>
-              Ou collez directement le JSON ici :
+              {t('pairing.paste_label')}
             </p>
 
             <textarea
               rows={6}
               className="input-control"
               style={{ fontFamily: 'var(--font-mono)', fontSize: '0.78rem', marginBottom: '0.75rem' }}
-              placeholder='Collez le JSON ici {"tables": ...}'
+              placeholder={t('pairing.paste_placeholder')}
               value={importJsonText}
               onChange={(e) => setImportJsonText(e.target.value)}
             />
@@ -392,7 +396,7 @@ export const DevicePairingModal: React.FC<DevicePairingModalProps> = ({
               style={{ width: '100%', gap: '0.5rem' }}
             >
               <Upload size={18} />
-              <span>Écraser la base et importer les données</span>
+              <span>{t('pairing.apply_btn')}</span>
             </button>
 
             {importStatus && (
@@ -401,10 +405,10 @@ export const DevicePairingModal: React.FC<DevicePairingModalProps> = ({
                   marginTop: '1rem',
                   padding: '0.75rem',
                   borderRadius: 'var(--radius-md)',
-                  background: importStatus.startsWith('Succès')
+                  background: importStatus.includes(t('pairing.success'))
                     ? 'rgba(16, 185, 129, 0.15)'
                     : 'rgba(244, 63, 94, 0.15)',
-                  color: importStatus.startsWith('Succès') ? '#059669' : '#e11d48',
+                  color: importStatus.includes(t('pairing.success')) ? '#059669' : '#e11d48',
                   fontSize: '0.82rem',
                   fontWeight: 700,
                 }}

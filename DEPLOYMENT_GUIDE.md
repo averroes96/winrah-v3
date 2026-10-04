@@ -22,7 +22,12 @@ This workflow runs on **Ubuntu** (`ubuntu-latest`), compiles the web app, syncs 
 
 > ℹ️ **CI Fallback**: If `ANDROID_KEYSTORE_BASE64` is not configured, the workflow generates a temporary self-signed release keystore so you still get a downloadable, signed `.apk` artifact for test distribution!
 > 
-> 📁 **Google Drive Deployment**: When `GDRIVE_SERVICE_ACCOUNT_JSON` and `GDRIVE_FOLDER_ID` are configured, every signed APK is automatically uploaded to your Google Drive folder (named `WINRAH-vX.X.X.apk`) for instant download by warehouse operators. Make sure to **Share** your Google Drive folder with the Service Account email address as an **Editor**!
+> 📁 **Google Drive Deployment**: When `GDRIVE_SERVICE_ACCOUNT_JSON` and `GDRIVE_FOLDER_ID` are configured, every signed APK is automatically uploaded to your Google Drive folder (named `WINRAH-vX.X.X.apk`) for instant download by warehouse operators.
+> 
+> **Important prerequisites for Google Drive deployment:**
+> 1. **Enable Google Drive API**: You must enable the **Google Drive API** in your Google Cloud Project:
+>    👉 [Enable Google Drive API](https://console.cloud.google.com/apis/library/drive.googleapis.com)
+> 2. **Share the Folder**: Share your target Google Drive folder with the Service Account email address (found in your JSON key as `client_email`, e.g. `xxx@averroes-ltd.iam.gserviceaccount.com`) as an **Editor**.
 
 ---
 

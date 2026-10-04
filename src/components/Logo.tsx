@@ -177,14 +177,14 @@ export const Logo: React.FC<LogoProps> = ({
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', lineHeight: 1.1 }}>
             <span
               style={{
-                fontFamily: 'var(--font-sans)',
+                fontFamily: language === 'ar' ? 'var(--font-arabic)' : 'var(--font-sans)',
                 fontWeight: 900,
-                fontSize: size > 40 ? '1.4rem' : '1.18rem',
-                letterSpacing: '-0.035em',
+                fontSize: size > 40 ? (language === 'ar' ? '1.5rem' : '1.4rem') : (language === 'ar' ? '1.25rem' : '1.18rem'),
+                letterSpacing: language === 'ar' ? '0' : '-0.035em',
                 color: 'var(--text-primary)',
               }}
             >
-              WINRAH
+              {language === 'ar' ? 'وين راه' : 'WINRAH'}
             </span>
             <span
               style={{
@@ -198,7 +198,7 @@ export const Logo: React.FC<LogoProps> = ({
                 textTransform: 'uppercase',
               }}
             >
-              {language === 'ar' ? 'وين راه؟' : 'STOCK'}
+              {language === 'ar' ? 'v3.0' : 'STOCK'}
             </span>
           </div>
 

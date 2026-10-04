@@ -90,10 +90,29 @@ def main():
     )
 
     response = None
-    while response is None:
-        status, response = request.next_chunk()
-        if status:
-            print(f"Uploading progress: {int(status.progress() * 100)}%")
+    try:
+        while response is None:
+            status, response = request.next_chunk()
+            if status:
+                print(f"Uploading progress: {int(status.progress() * 100)}%")
+    except Exception as e:
+        err_msg = str(e)
+        if "Google Drive API has not been used" in err_msg or "accessNotConfigured" in err_msg or "403" in err_msg:
+            print("\n" + "=" * 70)
+            print("❌ GOOGLE DRIVE API IS DISABLED IN YOUR GOOGLE CLOUD PROJECT")
+            print("=" * 70)
+            print("👉 You must enable the Google Drive API for your service account's project:")
+            print("   https://console.cloud.google.com/apis/library/drive.googleapis.com")
+            print("\nOnce enabled, re-run the GitHub Actions workflow.")
+            print("=" * 70 + "\n")
+        elif "File not found" in err_msg or "notFound" in err_msg or "404" in err_msg:
+            print("\n" + "=" * 70)
+            print("❌ TARGET GOOGLE DRIVE FOLDER NOT FOUND OR NOT SHARED")
+            print("=" * 70)
+            print(f"👉 Ensure folder ID '{folder_id}' exists and is shared with your")
+            print("   Service Account email address with 'Editor' permission.")
+            print("=" * 70 + "\n")
+        raise
 
     file_id = response.get('id')
     view_link = response.get('webViewLink')

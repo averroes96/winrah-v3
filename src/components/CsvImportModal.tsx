@@ -14,8 +14,6 @@ import {
   CheckCircle,
   AlertCircle,
   Loader2,
-  FileText,
-  AlertTriangle,
 } from 'lucide-react';
 import { Warehouse } from '../types';
 import {
@@ -41,9 +39,9 @@ export const CsvImportModal: React.FC<CsvImportModalProps> = ({
   isOpen,
   onClose,
   onSuccess,
-  activeWarehouse,
+  activeWarehouse: _activeWarehouse,
 }) => {
-  const { t } = useI18n();
+  const { direction, t } = useI18n();
 
   const [csvContent, setCsvContent] = useState('');
   const [detectedFormat, setDetectedFormat] = useState<'v2' | 'v3' | 'unknown'>('unknown');
@@ -90,7 +88,7 @@ export const CsvImportModal: React.FC<CsvImportModalProps> = ({
       handleCsvChange(text);
     } catch (err) {
       console.error('Failed to load v2_database.csv:', err);
-      setCsvValidationErrors([{ line: 1, message: 'Impossible de charger /v2_database.csv. Veuillez sélectionner le fichier manuellement.' }]);
+      setCsvValidationErrors([{ line: 1, message: 'Impossible de charger /v2_database.csv.' }]);
     } finally {
       setIsLoadingOriginalV2(false);
     }
@@ -116,7 +114,10 @@ export const CsvImportModal: React.FC<CsvImportModalProps> = ({
       if (detectedFormat === 'v2' && parsedV2Data && parsedV2Data.products.length > 0) {
         const result = await importV2DatabaseToDb(parsedV2Data);
         setImportSuccessMessage(
-          `Base initialisée avec succès ! ${result.modelsCreated.toLocaleString()} modèles et ${result.sectionsCreated} sections importés dans l'entrepôt BASE.`
+          t('csv_import.success_v2', {
+            products: result.modelsCreated.toLocaleString(),
+            sections: result.sectionsCreated,
+          })
         );
         setCsvContent('');
         setParsedV2Data(null);
@@ -125,7 +126,10 @@ export const CsvImportModal: React.FC<CsvImportModalProps> = ({
       } else if (detectedFormat === 'v3' && parsedRows.length > 0) {
         const result = await importStandardCsvToDb(parsedRows);
         setImportSuccessMessage(
-          `Base initialisée avec succès ! ${result.modelsCreated.toLocaleString()} modèles importés dans l'entrepôt BASE.`
+          t('csv_import.success_v3', {
+            models: result.modelsCreated.toLocaleString(),
+            sections: result.sectionsCreated,
+          })
         );
         setCsvContent('');
         setParsedRows([]);
@@ -161,6 +165,7 @@ export const CsvImportModal: React.FC<CsvImportModalProps> = ({
       }}
     >
       <div
+        dir={direction}
         style={{
           background: 'var(--bg-card)',
           borderRadius: 'var(--radius-lg)',
@@ -203,10 +208,10 @@ export const CsvImportModal: React.FC<CsvImportModalProps> = ({
             </div>
             <div>
               <h3 style={{ margin: 0, fontSize: '1.05rem', fontWeight: 800 }}>
-                Importer un Catalogue CSV
+                {t('csv_import.title')}
               </h3>
               <p style={{ margin: 0, fontSize: '0.72rem', color: 'var(--text-muted)' }}>
-                Fichiers compatibles WINRAH v2 et v3 (détection automatique)
+                {t('csv_import.subtitle')}
               </p>
             </div>
           </div>
@@ -216,6 +221,7 @@ export const CsvImportModal: React.FC<CsvImportModalProps> = ({
             onClick={onClose}
             className="btn btn-icon"
             style={{ color: 'var(--text-secondary)' }}
+            aria-label={t('common.close')}
           >
             <X size={20} />
           </button>
@@ -243,12 +249,12 @@ export const CsvImportModal: React.FC<CsvImportModalProps> = ({
               {isLoadingOriginalV2 ? (
                 <>
                   <Loader2 size={14} className="spin" />
-                  <span>Chargement v2...</span>
+                  <span>{t('csv_import.loading_v2')}</span>
                 </>
               ) : (
                 <>
                   <Sparkles size={14} />
-                  <span>Charger base V2 complète (1 484 modèles)</span>
+                  <span>{t('csv_import.load_v2')}</span>
                 </>
               )}
             </button>
@@ -260,7 +266,7 @@ export const CsvImportModal: React.FC<CsvImportModalProps> = ({
               style={{ fontSize: '0.78rem', padding: '0.5rem 0.85rem' }}
             >
               <Upload size={14} />
-              <span>Fichier local</span>
+              <span>{t('csv_import.local_file')}</span>
             </button>
 
             <button
@@ -270,7 +276,7 @@ export const CsvImportModal: React.FC<CsvImportModalProps> = ({
               style={{ fontSize: '0.78rem', padding: '0.5rem 0.85rem' }}
             >
               <FileSpreadsheet size={14} />
-              <span>Modèle v3</span>
+              <span>{t('csv_import.template_v3')}</span>
             </button>
           </div>
 
@@ -312,10 +318,13 @@ export const CsvImportModal: React.FC<CsvImportModalProps> = ({
             >
               <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                 <span className="badge badge-primary" style={{ fontSize: '0.72rem', fontWeight: 800 }}>
-                  Format V2 Détecté
+                  {t('csv_import.format_v2')}
                 </span>
                 <span style={{ fontSize: '0.78rem', color: 'var(--text-secondary)' }}>
-                  {parsedV2Data.products.length.toLocaleString()} articles • {parsedV2Data.sections.length} rayons
+                  {t('csv_import.format_v2_stats', {
+                    products: parsedV2Data.products.length.toLocaleString(),
+                    sections: parsedV2Data.sections.length,
+                  })}
                 </span>
               </div>
             </div>
@@ -334,10 +343,12 @@ export const CsvImportModal: React.FC<CsvImportModalProps> = ({
               }}
             >
               <span className="badge badge-success" style={{ fontSize: '0.72rem', fontWeight: 800 }}>
-                Format V3 Détecté
+                {t('csv_import.format_v3')}
               </span>
               <span style={{ fontSize: '0.78rem', color: 'var(--text-secondary)' }}>
-                {parsedRows.length.toLocaleString()} lignes valides prêtes à être importées
+                {t('csv_import.format_v3_stats', {
+                  rows: parsedRows.length.toLocaleString(),
+                })}
               </span>
             </div>
           )}
@@ -354,17 +365,17 @@ export const CsvImportModal: React.FC<CsvImportModalProps> = ({
             >
               <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', color: 'var(--danger)', fontWeight: 700, fontSize: '0.78rem', marginBottom: '0.4rem' }}>
                 <AlertCircle size={15} />
-                <span>{csvValidationErrors.length} avertissement(s) de validation</span>
+                <span>{t('csv_import.validation_warnings', { count: csvValidationErrors.length })}</span>
               </div>
               <div style={{ maxHeight: '100px', overflowY: 'auto', fontSize: '0.72rem', color: 'var(--text-secondary)' }}>
                 {csvValidationErrors.slice(0, 5).map((err, i) => (
                   <div key={i} style={{ marginBottom: '2px' }}>
-                    Ligne {err.line}: {err.message}
+                    {t('csv_import.line_error', { line: err.line, message: err.message })}
                   </div>
                 ))}
                 {csvValidationErrors.length > 5 && (
                   <div style={{ fontStyle: 'italic', marginTop: '4px' }}>
-                    + {csvValidationErrors.length - 5} autres erreurs...
+                    {t('csv_import.more_errors', { count: csvValidationErrors.length - 5 })}
                   </div>
                 )}
               </div>
@@ -374,7 +385,7 @@ export const CsvImportModal: React.FC<CsvImportModalProps> = ({
           {/* Textarea for pasting */}
           <div>
             <label style={{ display: 'block', fontSize: '0.78rem', fontWeight: 700, marginBottom: '0.35rem', color: 'var(--text-secondary)' }}>
-              Ou collez le contenu CSV brut ci-dessous :
+              {t('csv_import.paste_label')}
             </label>
             <textarea
               value={csvContent}
@@ -433,12 +444,12 @@ export const CsvImportModal: React.FC<CsvImportModalProps> = ({
             {isImporting ? (
               <>
                 <Loader2 size={16} className="spin" />
-                <span>Importation en cours...</span>
+                <span>{t('csv_import.executing')}</span>
               </>
             ) : (
               <>
                 <CheckCircle size={16} />
-                <span>Exécuter l'importation</span>
+                <span>{t('csv_import.execute')}</span>
               </>
             )}
           </button>
