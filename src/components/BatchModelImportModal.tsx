@@ -39,6 +39,10 @@ export interface BatchModelItem {
   selected: boolean;
 }
 
+/** Normalize a shelf/location label for matching: "c-18", "C 18", "C18." -> "C18" */
+const normalizeLocKey = (value: string): string =>
+  (value || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
+
 interface BatchModelImportModalProps {
   isOpen: boolean;
   onClose: () => void;
@@ -86,13 +90,13 @@ export const BatchModelImportModal: React.FC<BatchModelImportModalProps> = ({
     return sections.filter((s) => areaIdSet.has(s.area_id) && s.status === 'active');
   }, [sections, activeAreas]);
 
-  // Map of normalized section names to Section object
+  // Map of normalized section names to Section object ("C-18", "c 18", "C18" all -> "C18")
   const sectionNameMap = useMemo(() => {
     const map = new Map<string, Section>();
     for (const sec of activeSections) {
-      const cleanName = (sec.name || '').trim().toUpperCase();
-      if (cleanName) {
-        map.set(cleanName, sec);
+      const key = normalizeLocKey(sec.name || '');
+      if (key && !map.has(key)) {
+        map.set(key, sec);
       }
     }
     return map;
@@ -124,20 +128,15 @@ export const BatchModelImportModal: React.FC<BatchModelImportModalProps> = ({
     if (!locationCode) return null;
     const clean = locationCode.trim().toUpperCase();
 
-    // 1. Try to find an area whose name matches the starting letter (e.g. 'C' for 'C18' -> 'Zone C' or 'C')
+    // 1. Try to find an area matching the leading letter (e.g. 'C' for 'C18' -> 'Zone C' or 'C').
+    //    Exact matches are checked first so "Zone C" wins over e.g. "Chaussures enfants".
     const matchLetter = clean.match(/^[A-Z]+/);
     if (matchLetter) {
       const letter = matchLetter[0];
-      const matchingArea = activeAreas.find((a) => {
-        const aName = a.name.trim().toUpperCase();
-        return (
-          aName === letter ||
-          aName === `ZONE ${letter}` ||
-          aName === `ZONE-${letter}` ||
-          aName.startsWith(`ZONE ${letter}`) ||
-          aName.startsWith(letter)
-        );
-      });
+      const names = activeAreas.map((a) => ({ a, n: a.name.trim().toUpperCase() }));
+      const matchingArea =
+        names.find(({ n }) => n === letter || n === `ZONE ${letter}` || n === `ZONE-${letter}`)?.a ||
+        names.find(({ n }) => n.startsWith(`ZONE ${letter} `) || n.startsWith(`ZONE ${letter}-`))?.a;
       if (matchingArea) return matchingArea;
     }
 
@@ -149,8 +148,7 @@ export const BatchModelImportModal: React.FC<BatchModelImportModalProps> = ({
   // Helper to check if a location already matches an existing section
   const getExistingSection = (locationCode: string): Section | null => {
     if (!locationCode) return null;
-    const clean = locationCode.trim().toUpperCase();
-    return sectionNameMap.get(clean) || null;
+    return sectionNameMap.get(normalizeLocKey(locationCode)) || null;
   };
 
   // 1. Start AI Analysis of Delivery Slip Photos
@@ -286,34 +284,36 @@ export const BatchModelImportModal: React.FC<BatchModelImportModalProps> = ({
     try {
       const now = new Date().toISOString();
       const warehouseId = activeWarehouse.id;
+      const batchTag = Date.now().toString(36);
+      const rand = () => Math.random().toString(36).substring(2, 7);
 
-      // Cache existing sections in a map for dynamic updates during loop
+      // Cache existing sections (by normalized key) so repeated locations reuse one section
       const dynamicSectionMap = new Map<string, Section>(sectionNameMap);
 
-      let createdSectionsCount = 0;
-      let createdModelsCount = 0;
+      const newSections: Section[] = [];
+      const newModels: ShoeModel[] = [];
+      const newAssignments: ModelSection[] = [];
 
-      for (const item of validItems) {
+      validItems.forEach((item, idx) => {
         const cleanRef = item.reference_code.trim().toUpperCase();
-        const cleanLoc = item.location ? item.location.trim().toUpperCase() : '';
+        const cleanLoc = item.location ? item.location.trim().toUpperCase().replace(/\s+/g, '') : '';
+        const locKey = normalizeLocKey(cleanLoc);
 
         let targetSectionId: string | null = null;
 
         // A. Resolve or auto-create section if location specified
-        if (cleanLoc) {
-          if (dynamicSectionMap.has(cleanLoc)) {
-            targetSectionId = dynamicSectionMap.get(cleanLoc)!.id;
+        if (locKey) {
+          const existing = dynamicSectionMap.get(locKey);
+          if (existing) {
+            targetSectionId = existing.id;
           } else {
-            // Section does not exist yet -> Automatically create it!
             const chosenArea = resolveTargetAreaForLocation(cleanLoc);
             const parentAreaId = chosenArea?.id || targetAreaId || activeAreas[0]?.id;
 
             if (parentAreaId) {
               const secSlug = cleanLoc.toLowerCase().replace(/[^a-z0-9]/g, '-');
-              const newSectionId = `sec-${parentAreaId.replace(/^area-/, '')}-${secSlug}-${Date.now().toString(36).slice(-4)}`;
-
               const newSection: Section = {
-                id: newSectionId,
+                id: `sec-${parentAreaId.replace(/^area-/, '')}-${secSlug}-${batchTag}`,
                 area_id: parentAreaId,
                 name: cleanLoc,
                 status: 'active',
@@ -323,18 +323,17 @@ export const BatchModelImportModal: React.FC<BatchModelImportModalProps> = ({
                 is_dirty: true,
                 local_sync_status: 'pending',
               };
-
-              await db.put('sections', newSection);
-              dynamicSectionMap.set(cleanLoc, newSection);
-              targetSectionId = newSectionId;
-              createdSectionsCount++;
+              newSections.push(newSection);
+              dynamicSectionMap.set(locKey, newSection);
+              targetSectionId = newSection.id;
             }
           }
         }
 
-        // B. Create Model
-        const modelId = `model-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
-        const newModel: ShoeModel = {
+        // B. Create Model. Base36 timestamp + index keeps IDs unique within the batch
+        // and avoids the 13-digit timestamp pattern used by the dedup heuristics.
+        const modelId = `model-${batchTag}-${idx}-${rand()}`;
+        newModels.push({
           id: modelId,
           warehouse_id: warehouseId,
           reference_code: cleanRef,
@@ -345,14 +344,11 @@ export const BatchModelImportModal: React.FC<BatchModelImportModalProps> = ({
           version: 1,
           is_dirty: true,
           local_sync_status: 'pending',
-        };
-
-        await db.put('models', newModel);
-        createdModelsCount++;
+        });
 
         // C. Assign to Section if location resolved
         if (targetSectionId) {
-          const newAssignment: ModelSection = {
+          newAssignments.push({
             id: `ms-${modelId}-${targetSectionId}`,
             model_id: modelId,
             section_id: targetSectionId,
@@ -361,10 +357,19 @@ export const BatchModelImportModal: React.FC<BatchModelImportModalProps> = ({
             version: 1,
             is_dirty: true,
             local_sync_status: 'pending',
-          };
-          await db.put('model_sections', newAssignment);
+          });
         }
-      }
+      });
+
+      // Write everything in bulk transactions (sections first so assignments never dangle),
+      // then notify listeners once instead of re-rendering the app for every single row.
+      await db.bulkPut('sections', newSections);
+      await db.bulkPut('models', newModels);
+      await db.bulkPut('model_sections', newAssignments);
+      db.notify();
+
+      const createdSectionsCount = newSections.length;
+      const createdModelsCount = newModels.length;
 
       // D. Record audit log
       await db.logAudit({

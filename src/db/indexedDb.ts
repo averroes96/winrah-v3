@@ -729,12 +729,20 @@ export class LocalDatabase {
     const modelIdsToDelete: string[] = [];
     const modelsToUpdate: ShoeModel[] = [];
 
-    // Step 4a: Merge timestamp duplicates that share the same base ID
+    // Step 4a: Merge timestamp duplicates that share the same base ID.
+    // A model is only treated as a derived copy when its stripped base ID is itself an
+    // existing model (e.g. "model-v2-3-1790...-ab12c" -> "model-v2-3"). Independently
+    // created models such as "model-<ts>-<rand>" all strip down to "model", which is NOT
+    // a real record, so they must keep their own identity instead of collapsing into one.
+    const existingModelKeys = new Set(
+      allModels.map((m) => `${whIdRemap.get(m.warehouse_id) || m.warehouse_id}:::${m.id}`)
+    );
     const modelsByBaseId = new Map<string, ShoeModel[]>();
     for (const m of allModels) {
       const whId = whIdRemap.get(m.warehouse_id) || m.warehouse_id;
       const baseId = getBaseModelId(m.id);
-      const k = `${whId}:::${baseId}`;
+      const baseKey = `${whId}:::${baseId}`;
+      const k = baseId !== m.id && existingModelKeys.has(baseKey) ? baseKey : `${whId}:::${m.id}`;
       if (!modelsByBaseId.has(k)) modelsByBaseId.set(k, []);
       modelsByBaseId.get(k)!.push(m);
     }
