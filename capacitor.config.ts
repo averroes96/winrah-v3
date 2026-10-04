@@ -2,7 +2,7 @@ import type { CapacitorConfig } from '@capacitor/cli';
 
 const config: CapacitorConfig = {
   appId: 'com.winrah.warehouse',
-  appName: 'WINRAH',
+  appName: 'وين راه',
   webDir: 'dist'
 };
 

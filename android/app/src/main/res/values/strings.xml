@@ -1,7 +1,7 @@
 <?xml version='1.0' encoding='utf-8'?>
 <resources>
-    <string name="app_name">WINRAH</string>
-    <string name="title_activity_main">WINRAH</string>
+    <string name="app_name">وين راه</string>
+    <string name="title_activity_main">وين راه</string>
     <string name="package_name">com.winrah.warehouse</string>
     <string name="custom_url_scheme">com.winrah.warehouse</string>
 </resources>

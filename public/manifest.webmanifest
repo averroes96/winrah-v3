@@ -1,12 +1,12 @@
 {
-  "name": "WINRAH - Gestion & Localisation Stock Chaussures",
-  "short_name": "WINRAH",
+  "name": "وين راه — نظام تحديد وإدارة مواقع الأحذية",
+  "short_name": "وين راه",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",
   "background_color": "#F8F9FB",
   "theme_color": "#F59E0B",
-  "description": "Application mobile-first de localisation, transfert et gestion de stocks de chaussures en entrepôt, 100% opérationnelle hors-ligne.",
+  "description": "وين راه — تطبيق تحديد مواقع ونقل وإدارة مخزون الأحذية في المستودعات، 100% يعمل بدون إنترنت.",
   "orientation": "portrait",
   "icons": [
     {
