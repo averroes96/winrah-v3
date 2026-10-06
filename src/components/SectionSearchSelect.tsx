@@ -210,7 +210,8 @@ export const SectionSearchSelect: React.FC<SectionSearchSelectProps> = ({
             ref={inputRef}
             type="text"
             value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
+            maxLength={32}
+            onChange={(e) => setSearchQuery(e.target.value.slice(0, 32))}
             placeholder={t('section_select.input_placeholder')}
             style={{
               flex: 1,

@@ -64,10 +64,11 @@ export const SearchTab: React.FC<SearchTabProps> = ({
   const [internalQuery, setInternalQuery] = useState('');
   const query = externalQuery !== undefined ? externalQuery : internalQuery;
   const setQuery = (q: string) => {
+    const limited = q.slice(0, 32);
     if (onQueryChange) {
-      onQueryChange(q);
+      onQueryChange(limited);
     } else {
-      setInternalQuery(q);
+      setInternalQuery(limited);
     }
   };
 
@@ -289,9 +290,10 @@ export const SearchTab: React.FC<SearchTabProps> = ({
             ref={searchInputRef}
             type="text"
             value={query}
+            maxLength={32}
             onFocus={() => setIsSearchFocused(true)}
             onBlur={() => setIsSearchFocused(false)}
-            onChange={(e) => setQuery(e.target.value)}
+            onChange={(e) => setQuery(e.target.value.slice(0, 32))}
             onKeyDown={(e) => {
               if (e.key === 'Enter') {
                 flushSearchLog();

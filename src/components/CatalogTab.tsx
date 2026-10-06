@@ -569,9 +569,10 @@ export const CatalogTab: React.FC<CatalogTabProps> = ({
                   type="text"
                   placeholder={t('catalog.structure.filter_placeholder')}
                   value={structureSearch}
+                  maxLength={32}
                   onFocus={() => setIsStructureSearchFocused(true)}
                   onBlur={() => setIsStructureSearchFocused(false)}
-                  onChange={(e) => setStructureSearch(e.target.value)}
+                  onChange={(e) => setStructureSearch(e.target.value.slice(0, 32))}
                   style={{
                     width: '100%',
                     height: '46px',

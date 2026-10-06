@@ -84,8 +84,11 @@ export function App() {
   // Model detail modal state
   const [detailModalItem, setDetailModalItem] = useState<DisambiguatedModelResult | null>(null);
 
-  // Search query state
-  const [searchQuery, setSearchQuery] = useState('');
+  // Search query state (clamped to max 32 chars)
+  const [searchQuery, setSearchQueryState] = useState('');
+  const setSearchQuery = useCallback((q: string) => {
+    setSearchQueryState(q.slice(0, 32));
+  }, []);
 
   const isSeedingRef = React.useRef(false);
 

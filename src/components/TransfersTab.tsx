@@ -339,7 +339,8 @@ export const TransfersTab: React.FC<TransfersTabProps> = ({
               type="text"
               placeholder="Tapez une référence ou un nom (ex: 724, 629, Baskets...)..."
               value={searchFilter}
-              onChange={(e) => setSearchFilter(e.target.value)}
+              maxLength={32}
+              onChange={(e) => setSearchFilter(e.target.value.slice(0, 32))}
               style={{
                 flex: 1,
                 border: 'none',

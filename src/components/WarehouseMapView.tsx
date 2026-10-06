@@ -790,7 +790,8 @@ export const WarehouseMapView: React.FC<WarehouseMapViewProps> = ({
             <input
               type="text"
               value={filterQuery}
-              onChange={(e) => setFilterQuery(e.target.value)}
+              maxLength={32}
+              onChange={(e) => setFilterQuery(e.target.value.slice(0, 32))}
               placeholder={t('map.search_placeholder')}
               className="input-field"
               style={{
