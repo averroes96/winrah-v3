@@ -207,7 +207,7 @@ export const QuickAddModelBottomSheet: React.FC<QuickAddModelBottomSheetProps> =
         background: 'rgba(15, 23, 42, 0.45)',
         backdropFilter: 'blur(4px)',
         WebkitBackdropFilter: 'blur(4px)',
-        zIndex: 200,
+        zIndex: 1100,
         display: 'flex',
         flexDirection: 'column',
         justifyContent: 'flex-end',
@@ -227,7 +227,7 @@ export const QuickAddModelBottomSheet: React.FC<QuickAddModelBottomSheetProps> =
           boxShadow: '0 -10px 40px rgba(0, 0, 0, 0.16)',
           border: '1px solid var(--border-default)',
           borderBottom: 'none',
-          maxHeight: '90vh',
+          maxHeight: '92vh',
           display: 'flex',
           flexDirection: 'column',
           animation: 'slideUp 0.25s cubic-bezier(0.16, 1, 0.3, 1) forwards',
@@ -236,7 +236,7 @@ export const QuickAddModelBottomSheet: React.FC<QuickAddModelBottomSheetProps> =
         }}
       >
         {/* Drag Pill Handle */}
-        <div style={{ display: 'flex', justifyContent: 'center', paddingTop: '10px', paddingBottom: '4px' }}>
+        <div style={{ display: 'flex', justifyContent: 'center', paddingTop: '10px', paddingBottom: '4px', flexShrink: 0 }}>
           <div
             style={{
               width: '40px',
@@ -255,6 +255,7 @@ export const QuickAddModelBottomSheet: React.FC<QuickAddModelBottomSheetProps> =
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'space-between',
+            flexShrink: 0,
           }}
         >
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem' }}>
@@ -303,7 +304,7 @@ export const QuickAddModelBottomSheet: React.FC<QuickAddModelBottomSheetProps> =
 
         {/* Switch to Batch / Delivery Slip Import Mode */}
         {onOpenBatchImport && (
-          <div style={{ padding: '0.65rem 1.25rem 0.25rem 1.25rem', background: '#FFFFFF' }}>
+          <div style={{ padding: '0.65rem 1.25rem 0.25rem 1.25rem', background: '#FFFFFF', flexShrink: 0 }}>
             <button
               type="button"
               onClick={() => {
@@ -356,6 +357,7 @@ export const QuickAddModelBottomSheet: React.FC<QuickAddModelBottomSheetProps> =
               alignItems: 'center',
               gap: '0.4rem',
               borderBottom: '1px solid #A7F3D0',
+              flexShrink: 0,
             }}
           >
             <CheckCircle2 size={16} />
@@ -363,20 +365,32 @@ export const QuickAddModelBottomSheet: React.FC<QuickAddModelBottomSheetProps> =
           </div>
         )}
 
-        {/* Scrollable Form Body */}
+        {/* Form Container with Scrollable Body & Fixed Pinned Actions */}
         <form
           onSubmit={handleSubmit}
           style={{
             flex: 1,
-            overflowY: 'auto',
-            padding: '1rem 1.25rem',
             display: 'flex',
             flexDirection: 'column',
-            gap: '1rem',
+            minHeight: 0,
+            overflow: 'hidden',
           }}
         >
-          {/* 1. Reference Code (Mandatory & Core) */}
-          <div>
+          {/* Scrollable Form Body */}
+          <div
+            style={{
+              flex: 1,
+              overflowY: 'auto',
+              minHeight: 0,
+              padding: '1rem 1.25rem',
+              display: 'flex',
+              flexDirection: 'column',
+              gap: '1rem',
+              WebkitOverflowScrolling: 'touch',
+            }}
+          >
+            {/* 1. Reference Code (Mandatory & Core) */}
+            <div>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.35rem' }}>
               <label style={{ fontSize: '0.8125rem', fontWeight: 700, color: 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
                 <Tag size={15} style={{ color: 'var(--accent)' }} />
@@ -611,75 +625,79 @@ export const QuickAddModelBottomSheet: React.FC<QuickAddModelBottomSheetProps> =
               </div>
             </div>
           )}
+        </div>
 
-          {/* Sticky Bottom Actions inside Form */}
-          <div
+        {/* Fixed Pinned Bottom Actions */}
+        <div
+          style={{
+            flexShrink: 0,
+            background: '#FFFFFF',
+            borderTop: '1px solid var(--border-default)',
+            boxShadow: '0 -4px 16px rgba(0, 0, 0, 0.06)',
+            padding: '0.75rem 1.25rem calc(0.75rem + max(env(safe-area-inset-bottom, 0px), 8px)) 1.25rem',
+            display: 'flex',
+            flexDirection: 'column',
+            gap: '0.65rem',
+            zIndex: 10,
+          }}
+        >
+          {/* Batch Mode Checkbox */}
+          <label
             style={{
-              marginTop: '0.5rem',
-              paddingTop: '0.75rem',
-              borderTop: '1px solid var(--border-default)',
               display: 'flex',
-              flexDirection: 'column',
-              gap: '0.65rem',
+              alignItems: 'center',
+              gap: '0.5rem',
+              cursor: 'pointer',
+              userSelect: 'none',
+              fontSize: '0.78rem',
+              color: 'var(--text-secondary)',
             }}
           >
-            {/* Batch Mode Checkbox */}
-            <label
+            <input
+              type="checkbox"
+              checked={isBatchMode}
+              onChange={(e) => setIsBatchMode(e.target.checked)}
+              style={{ width: '16px', height: '16px', accentColor: 'var(--accent)' }}
+            />
+            <span style={{ display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
+              <Repeat size={13} style={{ color: 'var(--accent)' }} />
+              <span>{t('modal.quick_add.batch_mode')}</span>
+            </span>
+          </label>
+
+          {/* Action Buttons */}
+          <div style={{ display: 'flex', gap: '0.5rem' }}>
+            <button
+              type="button"
+              onClick={onClose}
+              className="btn btn-secondary"
+              style={{ flex: 1, minHeight: '46px' }}
+            >
+              {t('common.cancel')}
+            </button>
+
+            <button
+              type="submit"
+              disabled={!referenceCode.trim() || isSaving}
+              className="btn btn-primary"
               style={{
+                flex: 2,
+                minHeight: '46px',
+                fontSize: '0.9rem',
+                fontWeight: 700,
+                opacity: !referenceCode.trim() || isSaving ? 0.6 : 1,
                 display: 'flex',
                 alignItems: 'center',
-                gap: '0.5rem',
-                cursor: 'pointer',
-                userSelect: 'none',
-                fontSize: '0.78rem',
-                color: 'var(--text-secondary)',
+                justifyContent: 'center',
+                gap: '0.45rem',
               }}
             >
-              <input
-                type="checkbox"
-                checked={isBatchMode}
-                onChange={(e) => setIsBatchMode(e.target.checked)}
-                style={{ width: '16px', height: '16px', accentColor: 'var(--accent)' }}
-              />
-              <span style={{ display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
-                <Repeat size={13} style={{ color: 'var(--accent)' }} />
-                <span>{t('modal.quick_add.batch_mode')}</span>
-              </span>
-            </label>
-
-            {/* Action Buttons */}
-            <div style={{ display: 'flex', gap: '0.5rem' }}>
-              <button
-                type="button"
-                onClick={onClose}
-                className="btn btn-secondary"
-                style={{ flex: 1, minHeight: '46px' }}
-              >
-                {t('common.cancel')}
-              </button>
-
-              <button
-                type="submit"
-                disabled={!referenceCode.trim() || isSaving}
-                className="btn btn-primary"
-                style={{
-                  flex: 2,
-                  minHeight: '46px',
-                  fontSize: '0.9rem',
-                  fontWeight: 700,
-                  opacity: !referenceCode.trim() || isSaving ? 0.6 : 1,
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  gap: '0.45rem',
-                }}
-              >
-                <Check size={18} />
-                <span>{isBatchMode ? t('modal.quick_add.save_and_next') : t('modal.quick_add.save_btn')}</span>
-              </button>
-            </div>
+              <Check size={18} />
+              <span>{isBatchMode ? t('modal.quick_add.save_and_next') : t('modal.quick_add.save_btn')}</span>
+            </button>
           </div>
-        </form>
+        </div>
+      </form>
       </div>
     </div>
   );
